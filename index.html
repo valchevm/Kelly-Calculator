@@ -13,9 +13,40 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .sync-indicator { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        .install-prompt {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen p-4">
+    <div id="installPrompt" class="install-prompt">
+        <div class="flex items-center gap-4">
+            <div>
+                <p class="font-bold mb-1">📱 Инсталирай приложението</p>
+                <p class="text-sm opacity-90">Добави Kelly Calculator на началния екран</p>
+            </div>
+            <button onclick="installApp()" class="bg-white text-purple-600 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100">
+                Инсталирай
+            </button>
+            <button onclick="dismissInstall()" class="text-white opacity-75 hover:opacity-100">✕</button>
+        </div>
+    </div>
+
     <div id="app" class="max-w-7xl mx-auto"></div>
 
     <script>
@@ -27,6 +58,32 @@
                     .catch(err => console.log('❌ SW registration failed:', err));
             });
         }
+
+        // PWA Install Prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installPrompt').style.display = 'block';
+        });
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('✅ PWA installed');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('installPrompt').style.display = 'none';
+                });
+            }
+        }
+
+        function dismissInstall() {
+            document.getElementById('installPrompt').style.display = 'none';
+        }
+
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_04Gubg3hklDJaLpKYTAKKMrqRxxqbMI5o8lnFyEfglPq5lNz86oXrOQXHXay0I_TSA/exec';
 
         let state = {
@@ -527,4 +584,3 @@
     </script>
 </body>
 </html>
-
