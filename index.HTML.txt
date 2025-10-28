@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kelly Calculator - Cloud Sync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .sync-indicator { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen p-4">
+    <div id="app" class="max-w-7xl mx-auto"></div>
+
+    <script>
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_04Gubg3hklDJaLpKYTAKKMrqRxxqbMI5o8lnFyEfglPq5lNz86oXrOQXHXay0I_TSA/exec';
+
+        let state = {
+            initialBank: 1000,
+            currentBank: 1000,
+            stakes: [],
+            history: [],
+            kellyType: 'half',
+            odds: '',
+            winProb: '',
+            syncing: false,
+            lastSync: null,
+            syncError: null
+        };
+
+        async function loadFromSheet() {
+            try {
+                state.syncing = true;
+                state.syncError = null;
+                render();
+                
+                const response = await fetch(APPS_SCRIPT_URL);
+                
+                if (!response.ok) {
+                    throw new Error('Грешка при зареждане');
+                }
+                
+                const data = await response.json();
+                
+                if (data && data.length > 1) {
+                    const rows = data.slice(1);
+                    state.stakes = rows.map(row => ({
+                        id: parseInt(row[0]) || Date.now(),
+                        number: parseInt(row[1]) || 1,
+                        kellyType: row[2] || 'half',
+                        odds: parseFloat(row[3]) || 0,
+                        winProb: parseFloat(row[4]) || 0,
+                        stakeAmount: parseFloat(row[5]) || 0,
+                        potentialWin: parseFloat(row[6]) || 0,
+                        result: row[7] || 'pending',
+                        bankBeforeStake: parseFloat(row[8]) || 1000,
+                        timestamp: row[9] || new Date().toLocaleString('bg-BG')
+                    }));
+                    
+                    recalculateBank();
+                }
+                
+                state.lastSync = new Date();
+                
+            } catch (error) {
+                console.error('Грешка при зареждане:', error);
+                state.syncError = 'Грешка при зареждане от облака';
+            } finally {
+                state.syncing = false;
+                render();
+            }
+        }
+
+        async function saveToSheet() {
+            try {
+                state.syncing = true;
+                state.syncError = null;
+                render();
+                
+                const values = [
+                    ['ID', 'Номер', 'Kelly', 'Коефициент', 'Вероятност', 'Залог', 'Печалба', 'Резултат', 'Банка Преди', 'Време']
+                ];
+                
+                state.stakes.forEach(stake => {
+                    values.push([
+                        stake.id,
+                        stake.number,
+                        stake.kellyType,
+                        stake.odds,
+                        stake.winProb,
+                        stake.stakeAmount,
+                        stake.potentialWin,
+                        stake.result,
+                        stake.bankBeforeStake || state.initialBank,
+                        stake.timestamp
+                    ]);
+                });
+
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(values)
+                });
+
+                localStorage.setItem('kellyData', JSON.stringify(state));
+                state.lastSync = new Date();
+                
+            } catch (error) {
+                console.error('Грешка при запазване:', error);
+                state.syncError = 'Грешка при запазване в облака';
+            } finally {
+                state.syncing = false;
+                render();
+            }
+        }
+
+        function recalculateBank() {
+            let bank = state.initialBank;
+            
+            state.stakes.forEach(stake => {
+                bank -= stake.stakeAmount;
+                
+                if (stake.result === 'win') {
+                    bank += stake.potentialWin;
+                } else if (stake.result === 'push') {
+                    bank += stake.stakeAmount;
+                }
+            });
+            
+            state.currentBank = bank;
+        }
+
+        function calculateStakeAmount(odds, winProb, kellyType, bank) {
+            const p = parseFloat(winProb) / 100;
+            const o = parseFloat(odds);
+            
+            if (!p || !o || p <= 0 || p >= 1 || o <= 1) return 0;
+            
+            const q = 1 - p;
+            const kellyFraction = (p * o - q) / o;
+            
+            let multiplier = 1;
+            if (kellyType === 'half') multiplier = 0.5;
+            else if (kellyType === 'quarter') multiplier = 0.25;
+            
+            return Math.max(0, bank * kellyFraction * multiplier);
+        }
+
+        function calculateEdge(odds, winProb) {
+            const p = parseFloat(winProb) / 100;
+            const o = parseFloat(odds);
+            
+            if (!p || !o || p <= 0 || p >= 1 || o <= 1) return null;
+            
+            const ev = (p * o) - 1;
+            return {
+                hasValue: ev > 0,
+                edgePercent: ev * 100,
+                expectedValue: ev
+            };
+        }
+
+        async function addStake() {
+            const stakeAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
+            
+            if (stakeAmount <= 0) {
+                alert('Невалидни данни!');
+                return;
+            }
+
+            if (stakeAmount > state.currentBank) {
+                alert('Няма достатъчно средства!');
+                return;
+            }
+
+            const newStake = {
+                id: Date.now(),
+                number: state.stakes.length + 1,
+                kellyType: state.kellyType,
+                odds: parseFloat(state.odds),
+                winProb: parseFloat(state.winProb),
+                stakeAmount: stakeAmount,
+                potentialWin: stakeAmount * parseFloat(state.odds),
+                result: 'pending',
+                bankBeforeStake: state.currentBank,
+                timestamp: new Date().toLocaleString('bg-BG')
+            };
+
+            state.stakes.push(newStake);
+            state.currentBank -= stakeAmount;
+            state.odds = '';
+            state.winProb = '';
+            
+            await saveToSheet();
+            render();
+        }
+
+        async function markResult(stakeId, result) {
+            const stake = state.stakes.find(s => s.id === stakeId);
+            if (!stake || stake.result !== 'pending') return;
+
+            stake.result = result;
+            
+            if (result === 'win') {
+                state.currentBank += stake.potentialWin;
+            } else if (result === 'push') {
+                state.currentBank += stake.stakeAmount;
+            }
+
+            state.history.push({
+                time: new Date().toLocaleString('bg-BG'),
+                action: result.toUpperCase(),
+                stake: stake.number,
+                amount: result === 'win' ? stake.potentialWin : result === 'push' ? stake.stakeAmount : 0,
+                bank: state.currentBank,
+                details: 'Залог #' + stake.number + ': ' + result
+            });
+
+            await saveToSheet();
+            render();
+        }
+
+        async function resetAll() {
+            if (confirm('Сигурни ли сте, че искате да изтриете всички данни?')) {
+                state.currentBank = state.initialBank;
+                state.stakes = [];
+                state.history = [];
+                await saveToSheet();
+                render();
+            }
+        }
+
+        function exportData() {
+            let csv = 'Залог №\\tKelly\\tКоеф.\\tВер.\\tЗалог\\tПечалба\\tРезултат\\tВреме\\n';
+            state.stakes.forEach(s => {
+                csv += s.number + '\\t' + s.kellyType + '\\t' + s.odds + '\\t' + s.winProb + '\\t' + s.stakeAmount.toFixed(2) + '\\t' + (s.potentialWin - s.stakeAmount).toFixed(2) + '\\t' + s.result + '\\t' + s.timestamp + '\\n';
+            });
+            
+            csv += '\\n\\nРезюме\\n';
+            csv += 'Начална Банка\\t' + state.initialBank + ' лв\\n';
+            csv += 'Текуща Банка\\t' + state.currentBank.toFixed(2) + ' лв\\n';
+            csv += 'Печалба/Загуба\\t' + (state.currentBank - state.initialBank).toFixed(2) + ' лв\\n';
+            
+            navigator.clipboard.writeText(csv).then(() => {
+                alert('✅ Данните са копирани! Натисни Ctrl+V в Excel.');
+            }).catch(() => {
+                alert('❌ Не можах да копирам. Опитай отново.');
+            });
+        }
+
+        function render() {
+            const suggestedAmount = state.odds && state.winProb ? calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank) : 0;
+            const edgeInfo = state.odds && state.winProb ? calculateEdge(state.odds, state.winProb) : null;
+            const pendingStakes = state.stakes.filter(s => s.result === 'pending');
+            const completedStakes = state.stakes.filter(s => s.result !== 'pending');
+            const wonStakes = state.stakes.filter(s => s.result === 'win').length;
+            const lostStakes = state.stakes.filter(s => s.result === 'lose').length;
+            const totalPending = pendingStakes.reduce((sum, s) => sum + s.stakeAmount, 0);
+
+            document.getElementById('app').innerHTML = `
+                <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl shadow-xl p-6 mb-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h1 class="text-3xl font-bold mb-2">Kelly Calculator ☁️</h1>
+                            <p class="opacity-90">Синхронизирано с Google Sheets</p>
+                        </div>
+                        <div class="text-right">
+                            ${state.syncing ? '<p class="text-yellow-300 animate-pulse sync-indicator">⏳ Синхронизиране...</p>' : 
+                              state.lastSync ? '<p class="text-sm opacity-75">✅ Синхронизирано<br>' + state.lastSync.toLocaleTimeString('bg-BG') + '</p>' : 
+                              '<p class="text-sm opacity-75">❌ Не е синхронизирано</p>'}
+                            ${state.syncError ? '<p class="text-red-300 text-sm mt-1">' + state.syncError + '</p>' : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-blue-200">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Начална Банка</label>
+                        <input type="number" id="initialBank" value="${state.initialBank}" 
+                            class="w-full bg-blue-50 text-blue-700 p-2 rounded-lg text-2xl font-bold border-2 border-blue-300" />
+                    </div>
+                    
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-green-200">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Текуща Банка</label>
+                        <div class="text-3xl font-bold text-green-600">${state.currentBank.toFixed(2)} лв</div>
+                    </div>
+                    
+                    <div class="rounded-xl p-5 shadow-lg border-2 ${state.currentBank >= state.initialBank ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Печалба/Загуба</label>
+                        <div class="text-3xl font-bold ${state.currentBank >= state.initialBank ? 'text-green-600' : 'text-red-600'}">
+                            ${state.currentBank >= state.initialBank ? '+' : ''}${(state.currentBank - state.initialBank).toFixed(2)} лв
+                        </div>
+                        <p class="text-xs text-gray-600 mt-1">${((state.currentBank - state.initialBank) / state.initialBank * 100).toFixed(1)}% ROI</p>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-purple-200">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Статистика</label>
+                        <div class="text-xl font-bold text-purple-600">${wonStakes}W / ${lostStakes}L / ${pendingStakes.length}P</div>
+                        <p class="text-xs text-gray-600 mt-1">Заложени: ${totalPending.toFixed(2)} лв</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 border-2 border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Добави Нов Залог</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Kelly Тип</label>
+                            <select id="kellyType" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                                <option value="half" ${state.kellyType === 'half' ? 'selected' : ''}>Half Kelly</option>
+                                <option value="quarter" ${state.kellyType === 'quarter' ? 'selected' : ''}>Quarter Kelly</option>
+                                <option value="full" ${state.kellyType === 'full' ? 'selected' : ''}>Full Kelly</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Коефициент</label>
+                            <input type="number" step="0.01" id="odds" value="${state.odds}" placeholder="напр. 1.5"
+                                class="w-full p-3 border-2 border-gray-300 rounded-lg" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Вероятност (%)</label>
+                            <input type="number" step="1" id="winProb" value="${state.winProb}" placeholder="напр. 80"
+                                class="w-full p-3 border-2 border-gray-300 rounded-lg" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Сума за Залог</label>
+                            <div class="p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg text-xl font-bold text-yellow-800">
+                                ${suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---'}
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-end">
+                            <button onclick="addStake()" ${!state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue) || state.syncing ? 'disabled' : ''}
+                                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-semibold transition">
+                                ➕ Добави
+                            </button>
+                        </div>
+                    </div>
+
+                    ${edgeInfo && !edgeInfo.hasValue ? `
+                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
+                            <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
+                            <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                        </div>
+                    ` : ''}
+
+                    ${edgeInfo && edgeInfo.hasValue && suggestedAmount > 0 ? `
+                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                            <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
+                            <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                        </div>
+                    ` : ''}
+                </div>
+
+                ${pendingStakes.length > 0 ? `
+                    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 border-2 border-orange-200">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Активни Залози (${pendingStakes.length})</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="bg-orange-100">
+                                        <th class="p-3 text-left">#</th>
+                                        <th class="p-3 text-left">Коеф.</th>
+                                        <th class="p-3 text-left">Залог</th>
+                                        <th class="p-3 text-left">Печалба</th>
+                                        <th class="p-3 text-left">Действие</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${pendingStakes.map(s => `
+                                        <tr class="border-b hover:bg-orange-50">
+                                            <td class="p-3 font-bold">${s.number}</td>
+                                            <td class="p-3">${s.odds}</td>
+                                            <td class="p-3 font-bold text-red-600">${s.stakeAmount.toFixed(2)} лв</td>
+                                            <td class="p-3 font-bold text-green-600">+${s.potentialWin.toFixed(2)} лв</td>
+                                            <td class="p-3">
+                                                <div class="flex gap-1">
+                                                    <button onclick="markResult(${s.id}, 'win')" 
+                                                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">Win</button>
+                                                    <button onclick="markResult(${s.id}, 'push')" 
+                                                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-sm">Push</button>
+                                                    <button onclick="markResult(${s.id}, 'lose')" 
+                                                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Lose</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <div class="flex gap-4">
+                    <button onclick="resetAll()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold">
+                        🔄 Рестартирай
+                    </button>
+                    <button onclick="exportData()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold">
+                        📋 Копирай за Excel
+                    </button>
+                    <button onclick="loadFromSheet()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold">
+                        ☁️ Синхронизирай
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('initialBank')?.addEventListener('change', async (e) => {
+                state.initialBank = parseFloat(e.target.value) || 0;
+                state.currentBank = state.initialBank;
+                state.stakes = [];
+                await saveToSheet();
+                render();
+            });
+
+            document.getElementById('kellyType')?.addEventListener('change', (e) => {
+                state.kellyType = e.target.value;
+                render();
+            });
+
+            document.getElementById('odds')?.addEventListener('input', (e) => {
+                state.odds = e.target.value;
+                render();
+            });
+
+            document.getElementById('winProb')?.addEventListener('input', (e) => {
+                state.winProb = e.target.value;
+                render();
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const saved = localStorage.getItem('kellyData');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    state = { ...state, ...data };
+                } catch (e) {}
+            }
+            
+            render();
+            await loadFromSheet();
+        });
+    </script>
+</body>
+</html>
