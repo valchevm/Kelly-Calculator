@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelly Calculator</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Kelly Calc">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -14,6 +19,14 @@
     <div id="app" class="max-w-7xl mx-auto"></div>
 
     <script>
+        // PWA Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/Kelly-Calculator/sw.js')
+                    .then(reg => console.log('✅ Service Worker registered'))
+                    .catch(err => console.log('❌ SW registration failed:', err));
+            });
+        }
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_04Gubg3hklDJaLpKYTAKKMrqRxxqbMI5o8lnFyEfglPq5lNz86oXrOQXHXay0I_TSA/exec';
 
         let state = {
@@ -514,3 +527,4 @@
     </script>
 </body>
 </html>
+
