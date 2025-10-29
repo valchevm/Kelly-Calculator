@@ -354,23 +354,45 @@
         async function loadAdminPanel() {
             document.getElementById('userInfo').textContent = '👑 Admin Mode';
             
-            const usersSnapshot = await db.collection('users').get();
-            const stakesSnapshot = await db.collection('stakes').orderBy('timestamp', 'desc').get();
-            
-            const users = [];
-            usersSnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
-            
-            const allStakes = [];
-            stakesSnapshot.forEach(doc => {
-                const data = doc.data();
-                allStakes.push({ 
-                    id: doc.id, 
-                    ...data,
-                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+            try {
+                const usersSnapshot = await db.collection('users').get();
+                const stakesSnapshot = await db.collection('stakes').get();
+                
+                const users = [];
+                usersSnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
+                
+                const allStakes = [];
+                stakesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    allStakes.push({ 
+                        id: doc.id, 
+                        ...data,
+                        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date(),
+                        stakeAmount: data.stakeAmount || 0,
+                        potentialWin: data.potentialWin || 0,
+                        odds: data.odds || 0,
+                        homeTeam: data.homeTeam || 'N/A',
+                        awayTeam: data.awayTeam || 'N/A',
+                        result: data.result || 'pending'
+                    });
                 });
-            });
-            
-            renderAdminPanel(users, allStakes);
+                
+                // Sort by timestamp descending
+                allStakes.sort((a, b) => b.timestamp - a.timestamp);
+                
+                renderAdminPanel(users, allStakes);
+            } catch (error) {
+                console.error('Admin panel error:', error);
+                document.getElementById('calculatorContent').innerHTML = `
+                    <div class="bg-red-100 border-2 border-red-400 rounded-lg p-6">
+                        <h2 class="text-xl font-bold text-red-800 mb-2">Грешка при зареждане</h2>
+                        <p class="text-red-700">${error.message}</p>
+                        <button onclick="loadAdminPanel()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg">
+                            Опитай отново
+                        </button>
+                    </div>
+                `;
+            }
         }
 
         function renderCalculator() {
@@ -381,12 +403,12 @@
             
             const wonStakes = completedStakes.filter(s => s.result === 'win');
             const lostStakes = completedStakes.filter(s => s.result === 'lose');
-            const totalStaked = completedStakes.reduce((sum, s) => sum + s.stakeAmount, 0);
-            const totalProfit = wonStakes.reduce((sum, s) => sum + s.potentialProfit, 0) - lostStakes.reduce((sum, s) => sum + s.stakeAmount, 0);
+            const totalStaked = completedStakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
+            const totalProfit = wonStakes.reduce((sum, s) => sum + (s.potentialProfit || 0), 0) - lostStakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
             const yield_pct = calculateYield(totalProfit, totalStaked);
             const roi = calculateROI(state.currentBank, state.initialBank);
             const winRate = completedStakes.length > 0 ? (wonStakes.length / completedStakes.length * 100) : 0;
-            const avgOdds = completedStakes.length > 0 ? completedStakes.reduce((sum, s) => sum + s.odds, 0) / completedStakes.length : 0;
+            const avgOdds = completedStakes.length > 0 ? completedStakes.reduce((sum, s) => sum + (s.odds || 0), 0) / completedStakes.length : 0;
 
             document.getElementById('calculatorContent').innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -542,17 +564,17 @@
                                 <tbody>
                                     ${completedStakes.slice(0, 20).map(s => `
                                         <tr class="border-b ${s.result === 'win' ? 'bg-green-50' : s.result === 'lose' ? 'bg-red-50' : 'bg-yellow-50'}">
-                                            <td class="p-2 font-bold">${s.number}</td>
-                                            <td class="p-2">${s.homeTeam} - ${s.awayTeam}</td>
-                                            <td class="p-2">${s.odds}</td>
-                                            <td class="p-2">${s.stakeAmount.toFixed(2)}</td>
+                                            <td class="p-2 font-bold">${s.number || 0}</td>
+                                            <td class="p-2">${s.homeTeam || 'N/A'} - ${s.awayTeam || 'N/A'}</td>
+                                            <td class="p-2">${(s.odds || 0).toFixed(2)}</td>
+                                            <td class="p-2">${(s.stakeAmount || 0).toFixed(2)}</td>
                                             <td class="p-2">
                                                 <span class="font-bold px-2 py-1 rounded ${s.result === 'win' ? 'bg-green-200 text-green-800' : s.result === 'lose' ? 'bg-red-200 text-red-800' : 'bg-yellow-200 text-yellow-800'}">
-                                                    ${s.result.toUpperCase()}
+                                                    ${(s.result || 'PENDING').toUpperCase()}
                                                 </span>
                                             </td>
                                             <td class="p-2 font-bold ${s.result === 'win' ? 'text-green-600' : 'text-red-600'}">
-                                                ${s.result === 'win' ? '+' + s.potentialProfit.toFixed(2) : '-' + s.stakeAmount.toFixed(2)} лв
+                                                ${s.result === 'win' ? '+' + ((s.potentialProfit || 0).toFixed(2)) : '-' + ((s.stakeAmount || 0).toFixed(2))} лв
                                             </td>
                                         </tr>
                                     `).join('')}
