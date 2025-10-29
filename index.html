@@ -6,204 +6,219 @@
     <title>Kelly Calculator</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Kelly Calc">
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .sync-indicator { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        .install-prompt {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 16px 24px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            display: none;
-            z-index: 1000;
-            animation: slideUp 0.3s ease-out;
-        }
-        @keyframes slideUp {
-            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
-            to { transform: translateX(-50%) translateY(0); opacity: 1; }
-        }
     </style>
 </head>
-<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen p-4">
-    <div id="installPrompt" class="install-prompt">
-        <div class="flex items-center gap-4">
-            <div>
-                <p class="font-bold mb-1">📱 Инсталирай приложението</p>
-                <p class="text-sm opacity-90">Добави Kelly Calculator на началния екран</p>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+    
+    <!-- Login/Register Screen -->
+    <div id="authScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+            <h1 class="text-3xl font-bold text-center mb-8 text-blue-600">Kelly Calculator</h1>
+            
+            <div id="loginForm">
+                <h2 class="text-xl font-semibold mb-4">Вход</h2>
+                <input type="email" id="loginEmail" placeholder="Email" class="w-full p-3 border-2 rounded-lg mb-3">
+                <input type="password" id="loginPassword" placeholder="Парола" class="w-full p-3 border-2 rounded-lg mb-4">
+                <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700 mb-3">
+                    Влез
+                </button>
+                <p class="text-center text-sm text-gray-600">
+                    Нямаш акаунт? <button onclick="toggleAuth()" class="text-blue-600 font-semibold">Регистрирай се</button>
+                </p>
+                <hr class="my-4">
+                <button onclick="showAdminLogin()" class="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold hover:bg-purple-700">
+                    👑 Admin Вход
+                </button>
             </div>
-            <button onclick="installApp()" class="bg-white text-purple-600 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100">
-                Инсталирай
-            </button>
-            <button onclick="dismissInstall()" class="text-white opacity-75 hover:opacity-100">✕</button>
+            
+            <div id="registerForm" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">Регистрация</h2>
+                <input type="text" id="registerUsername" placeholder="Потребителско име" class="w-full p-3 border-2 rounded-lg mb-3">
+                <input type="email" id="registerEmail" placeholder="Email" class="w-full p-3 border-2 rounded-lg mb-3">
+                <input type="password" id="registerPassword" placeholder="Парола" class="w-full p-3 border-2 rounded-lg mb-4">
+                <button onclick="register()" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold hover:bg-green-700 mb-3">
+                    Регистрирай се
+                </button>
+                <p class="text-center text-sm text-gray-600">
+                    Имаш акаунт? <button onclick="toggleAuth()" class="text-blue-600 font-semibold">Влез</button>
+                </p>
+            </div>
+            
+            <div id="adminLoginForm" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">👑 Admin Вход</h2>
+                <input type="password" id="adminPassword" placeholder="Admin Парола" class="w-full p-3 border-2 rounded-lg mb-4">
+                <button onclick="adminLogin()" class="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold hover:bg-purple-700 mb-3">
+                    Влез като Admin
+                </button>
+                <button onclick="hideAdminLogin()" class="w-full bg-gray-400 text-white p-2 rounded-lg">
+                    Назад
+                </button>
+            </div>
+            
+            <div id="authError" class="mt-4 p-3 bg-red-100 text-red-700 rounded-lg hidden"></div>
         </div>
     </div>
-
-    <div id="app" class="max-w-7xl mx-auto"></div>
+    
+    <!-- Main App -->
+    <div id="mainApp" class="hidden p-4 max-w-7xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Kelly Calculator</h1>
+                    <p class="text-sm text-gray-600" id="userInfo"></p>
+                </div>
+                <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
+                    Изход
+                </button>
+            </div>
+        </div>
+        
+        <div id="calculatorContent"></div>
+    </div>
 
     <script>
-        // PWA Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/Kelly-Calculator/sw.js')
-                    .then(reg => console.log('✅ Service Worker registered'))
-                    .catch(err => console.log('❌ SW registration failed:', err));
-            });
-        }
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD_cE6Ek3L_l7wHRkrrmswlksUb1fLEWLA",
+            authDomain: "kelly-calculator-fbf1a.firebaseapp.com",
+            projectId: "kelly-calculator-fbf1a",
+            storageBucket: "kelly-calculator-fbf1a.firebasestorage.app",
+            messagingSenderId: "707784565895",
+            appId: "1:707784565895:web:e27104dc0ed8d8996b0422",
+            measurementId: "G-196ZJ43NT2"
+        };
 
-        // PWA Install Prompt
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            document.getElementById('installPrompt').style.display = 'block';
-        });
-
-        function installApp() {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('✅ PWA installed');
-                    }
-                    deferredPrompt = null;
-                    document.getElementById('installPrompt').style.display = 'none';
-                });
-            }
-        }
-
-        function dismissInstall() {
-            document.getElementById('installPrompt').style.display = 'none';
-        }
-
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw_04Gubg3hklDJaLpKYTAKKMrqRxxqbMI5o8lnFyEfglPq5lNz86oXrOQXHXay0I_TSA/exec';
-
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        const ADMIN_PASSWORD = "Bold_9000"; // Admin парола
+        
+        let currentUser = null;
+        let isAdmin = false;
         let state = {
             initialBank: 1000,
             currentBank: 1000,
             stakes: [],
-            history: [],
             kellyType: 'half',
             odds: '',
-            winProb: '',
-            syncing: false,
-            lastSync: null,
-            syncError: null
+            winProb: ''
         };
 
-        let renderTimeout = null;
+        // Auth UI Functions
+        function toggleAuth() {
+            document.getElementById('loginForm').classList.toggle('hidden');
+            document.getElementById('registerForm').classList.toggle('hidden');
+        }
 
-        async function loadFromSheet() {
+        function showAdminLogin() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('adminLoginForm').classList.remove('hidden');
+        }
+
+        function hideAdminLogin() {
+            document.getElementById('adminLoginForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('authError');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        // Authentication
+        async function register() {
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            if (!username || !email || !password) {
+                showError('Моля, попълнете всички полета!');
+                return;
+            }
+            
             try {
-                state.syncing = true;
-                state.syncError = null;
-                render();
-                
-                const response = await fetch(APPS_SCRIPT_URL);
-                
-                if (!response.ok) {
-                    throw new Error('Грешка при зареждане');
-                }
-                
-                const data = await response.json();
-                
-                if (data && data.length > 1) {
-                    const rows = data.slice(1);
-                    state.stakes = rows.map(row => ({
-                        id: parseInt(row[0]) || Date.now(),
-                        number: parseInt(row[1]) || 1,
-                        kellyType: row[2] || 'half',
-                        odds: parseFloat(row[3]) || 0,
-                        winProb: parseFloat(row[4]) || 0,
-                        stakeAmount: parseFloat(row[5]) || 0,
-                        potentialWin: parseFloat(row[6]) || 0,
-                        result: row[7] || 'pending',
-                        bankBeforeStake: parseFloat(row[8]) || 1000,
-                        timestamp: row[9] || new Date().toLocaleString('bg-BG')
-                    }));
-                    
-                    recalculateBank();
-                }
-                
-                state.lastSync = new Date();
-                
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                await db.collection('users').doc(userCredential.user.uid).set({
+                    username: username,
+                    email: email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showError('✅ Регистрацията е успешна!');
             } catch (error) {
-                console.error('Грешка при зареждане:', error);
-                state.syncError = 'Грешка при зареждане от облака';
-            } finally {
-                state.syncing = false;
-                render();
+                showError('Грешка: ' + error.message);
             }
         }
 
-        async function saveToSheet() {
+        async function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!email || !password) {
+                showError('Моля, въведете email и парола!');
+                return;
+            }
+            
             try {
-                state.syncing = true;
-                state.syncError = null;
-                render();
-                
-                const values = [
-                    ['ID', 'Номер', 'Kelly', 'Коефициент', 'Вероятност', 'Залог', 'Печалба', 'Резултат', 'Банка Преди', 'Време']
-                ];
-                
-                state.stakes.forEach(stake => {
-                    values.push([
-                        stake.id,
-                        stake.number,
-                        stake.kellyType,
-                        stake.odds,
-                        stake.winProb,
-                        stake.stakeAmount,
-                        stake.potentialWin,
-                        stake.result,
-                        stake.bankBeforeStake || state.initialBank,
-                        stake.timestamp
-                    ]);
-                });
-
-                const response = await fetch(APPS_SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(values)
-                });
-
-                localStorage.setItem('kellyData', JSON.stringify(state));
-                state.lastSync = new Date();
-                
+                await auth.signInWithEmailAndPassword(email, password);
             } catch (error) {
-                console.error('Грешка при запазване:', error);
-                state.syncError = 'Грешка при запазване в облака';
-            } finally {
-                state.syncing = false;
-                render();
+                showError('Грешка: ' + error.message);
             }
         }
 
-        function recalculateBank() {
-            let bank = state.initialBank;
-            
-            state.stakes.forEach(stake => {
-                bank -= stake.stakeAmount;
-                
-                if (stake.result === 'win') {
-                    bank += stake.potentialWin;
-                } else if (stake.result === 'push') {
-                    bank += stake.stakeAmount;
-                }
-            });
-            
-            state.currentBank = bank;
+        function adminLogin() {
+            const password = document.getElementById('adminPassword').value;
+            if (password === ADMIN_PASSWORD) {
+                isAdmin = true;
+                document.getElementById('authScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                loadAdminPanel();
+            } else {
+                showError('Грешна admin парола!');
+            }
         }
 
+        function logout() {
+            if (isAdmin) {
+                isAdmin = false;
+                location.reload();
+            } else {
+                auth.signOut();
+            }
+        }
+
+        // Auth State Observer
+        auth.onAuthStateChanged(async (user) => {
+            if (user && !isAdmin) {
+                currentUser = user;
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                const userData = userDoc.data();
+                
+                document.getElementById('authScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
+                
+                loadUserCalculator();
+            } else if (!isAdmin) {
+                document.getElementById('authScreen').classList.remove('hidden');
+                document.getElementById('mainApp').classList.add('hidden');
+            }
+        });
+
+        // Calculator Functions
         function calculateStakeAmount(odds, winProb, kellyType, bank) {
             const p = parseFloat(String(winProb).replace(',', '.')) / 100;
             const o = parseFloat(String(odds).replace(',', '.'));
@@ -213,10 +228,7 @@
             const q = 1 - p;
             const kellyFraction = (p * o - q) / o;
             
-            let multiplier = 1;
-            if (kellyType === 'half') multiplier = 0.5;
-            else if (kellyType === 'quarter') multiplier = 0.25;
-            
+            let multiplier = kellyType === 'half' ? 0.5 : kellyType === 'quarter' ? 0.25 : 1;
             return Math.max(0, bank * kellyFraction * multiplier);
         }
 
@@ -229,26 +241,20 @@
             const ev = (p * o) - 1;
             return {
                 hasValue: ev > 0,
-                edgePercent: ev * 100,
-                expectedValue: ev
+                edgePercent: ev * 100
             };
         }
 
         async function addStake() {
             const stakeAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
             
-            if (stakeAmount <= 0) {
+            if (stakeAmount <= 0 || stakeAmount > state.currentBank) {
                 alert('Невалидни данни!');
                 return;
             }
 
-            if (stakeAmount > state.currentBank) {
-                alert('Няма достатъчно средства!');
-                return;
-            }
-
             const newStake = {
-                id: Date.now(),
+                userId: currentUser.uid,
                 number: state.stakes.length + 1,
                 kellyType: state.kellyType,
                 odds: parseFloat(String(state.odds).replace(',', '.')),
@@ -256,331 +262,151 @@
                 stakeAmount: stakeAmount,
                 potentialWin: stakeAmount * parseFloat(String(state.odds).replace(',', '.')),
                 result: 'pending',
-                bankBeforeStake: state.currentBank,
-                timestamp: new Date().toLocaleString('bg-BG')
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            state.stakes.push(newStake);
+            await db.collection('stakes').add(newStake);
             state.currentBank -= stakeAmount;
             state.odds = '';
             state.winProb = '';
-            
-            await saveToSheet();
-            render();
+            loadUserCalculator();
         }
 
         async function markResult(stakeId, result) {
-            const stake = state.stakes.find(s => s.id === stakeId);
-            if (!stake || stake.result !== 'pending') return;
-
-            stake.result = result;
+            const stakeDoc = await db.collection('stakes').doc(stakeId).get();
+            const stake = stakeDoc.data();
+            
+            await db.collection('stakes').doc(stakeId).update({ result: result });
             
             if (result === 'win') {
                 state.currentBank += stake.potentialWin;
             } else if (result === 'push') {
                 state.currentBank += stake.stakeAmount;
             }
-
-            state.history.push({
-                time: new Date().toLocaleString('bg-BG'),
-                action: result.toUpperCase(),
-                stake: stake.number,
-                amount: result === 'win' ? stake.potentialWin : result === 'push' ? stake.stakeAmount : 0,
-                bank: state.currentBank,
-                details: 'Залог #' + stake.number + ': ' + result
-            });
-
-            await saveToSheet();
-            render();
+            
+            loadUserCalculator();
         }
 
-        async function resetAll() {
-            if (confirm('Сигурни ли сте, че искате да изтриете всички данни?')) {
-                state.currentBank = state.initialBank;
-                state.stakes = [];
-                state.history = [];
-                await saveToSheet();
-                render();
-            }
-        }
-
-        function exportData() {
-            let csv = 'Залог №\tKelly\tКоеф.\tВер.\tЗалог\tПечалба\tРезултат\tВреме\n';
-            state.stakes.forEach(s => {
-                csv += s.number + '\t' + s.kellyType + '\t' + s.odds + '\t' + s.winProb + '\t' + 
-                       s.stakeAmount.toFixed(2) + '\t' + (s.potentialWin - s.stakeAmount).toFixed(2) + '\t' + 
-                       s.result + '\t' + s.timestamp + '\n';
+        async function loadUserCalculator() {
+            const stakesSnapshot = await db.collection('stakes')
+                .where('userId', '==', currentUser.uid)
+                .orderBy('timestamp', 'desc')
+                .get();
+            
+            state.stakes = [];
+            stakesSnapshot.forEach(doc => {
+                state.stakes.push({ id: doc.id, ...doc.data() });
             });
             
-            csv += '\n\nРезюме\n';
-            csv += 'Начална Банка\t' + state.initialBank + ' лв\n';
-            csv += 'Текуща Банка\t' + state.currentBank.toFixed(2) + ' лв\n';
-            csv += 'Печалба/Загуба\t' + (state.currentBank - state.initialBank).toFixed(2) + ' лв\n';
-            
-            navigator.clipboard.writeText(csv).then(() => {
-                alert('✅ Данните са копирани! Натисни Ctrl+V в Excel.');
-            }).catch(() => {
-                alert('❌ Не можах да копирам. Опитай отново.');
-            });
+            renderCalculator();
         }
 
-        function render() {
-            const activeElement = document.activeElement;
-            const activeId = activeElement ? activeElement.id : null;
-            const selectionStart = activeElement?.selectionStart;
-            const selectionEnd = activeElement?.selectionEnd;
+        async function loadAdminPanel() {
+            document.getElementById('userInfo').textContent = '👑 Admin Mode';
             
+            const usersSnapshot = await db.collection('users').get();
+            const stakesSnapshot = await db.collection('stakes').get();
+            
+            const users = [];
+            usersSnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
+            
+            const allStakes = [];
+            stakesSnapshot.forEach(doc => allStakes.push({ id: doc.id, ...doc.data() }));
+            
+            renderAdminPanel(users, allStakes);
+        }
+
+        function renderCalculator() {
             const suggestedAmount = state.odds && state.winProb ? calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank) : 0;
             const edgeInfo = state.odds && state.winProb ? calculateEdge(state.odds, state.winProb) : null;
             const pendingStakes = state.stakes.filter(s => s.result === 'pending');
-            const completedStakes = state.stakes.filter(s => s.result !== 'pending');
-            const wonStakes = state.stakes.filter(s => s.result === 'win').length;
-            const lostStakes = state.stakes.filter(s => s.result === 'lose').length;
-            const totalPending = pendingStakes.reduce((sum, s) => sum + s.stakeAmount, 0);
-
-            document.getElementById('app').innerHTML = `
-                <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl shadow-xl p-6 mb-6">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h1 class="text-3xl font-bold mb-2">Kelly Calculator ☁️</h1>
-                            <p class="opacity-90">Синхронизирано с Google Sheets</p>
-                        </div>
-                        <div class="text-right">
-                            ${state.syncing ? '<p class="text-yellow-300 animate-pulse sync-indicator">⏳ Синхронизиране...</p>' : 
-                              state.lastSync ? '<p class="text-sm opacity-75">✅ Синхронизирано<br>' + state.lastSync.toLocaleTimeString('bg-BG') + '</p>' : 
-                              '<p class="text-sm opacity-75">❌ Не е синхронизирано</p>'}
-                            ${state.syncError ? '<p class="text-red-300 text-sm mt-1">' + state.syncError + '</p>' : ''}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-blue-200">
-                        <label class="block text-sm font-medium text-gray-600 mb-2">Начална Банка</label>
-                        <input type="number" id="initialBank" value="${state.initialBank}" 
-                            class="w-full bg-blue-50 text-blue-700 p-2 rounded-lg text-2xl font-bold border-2 border-blue-300" />
-                    </div>
-                    
-                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-green-200">
-                        <label class="block text-sm font-medium text-gray-600 mb-2">Текуща Банка</label>
-                        <div class="text-3xl font-bold text-green-600">${state.currentBank.toFixed(2)} лв</div>
-                    </div>
-                    
-                    <div class="rounded-xl p-5 shadow-lg border-2 ${state.currentBank >= state.initialBank ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}">
-                        <label class="block text-sm font-medium text-gray-600 mb-2">Печалба/Загуба</label>
-                        <div class="text-3xl font-bold ${state.currentBank >= state.initialBank ? 'text-green-600' : 'text-red-600'}">
-                            ${state.currentBank >= state.initialBank ? '+' : ''}${(state.currentBank - state.initialBank).toFixed(2)} лв
-                        </div>
-                        <p class="text-xs text-gray-600 mt-1">${((state.currentBank - state.initialBank) / state.initialBank * 100).toFixed(1)}% ROI</p>
-                    </div>
-                    
-                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-purple-200">
-                        <label class="block text-sm font-medium text-gray-600 mb-2">Статистика</label>
-                        <div class="text-xl font-bold text-purple-600">${wonStakes}W / ${lostStakes}L / ${pendingStakes.length}P</div>
-                        <p class="text-xs text-gray-600 mt-1">Заложени: ${totalPending.toFixed(2)} лв</p>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 border-2 border-gray-200">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">Добави Нов Залог</h2>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Kelly Тип</label>
-                            <select id="kellyType" class="w-full p-3 border-2 border-gray-300 rounded-lg">
-                                <option value="half" ${state.kellyType === 'half' ? 'selected' : ''}>Half Kelly</option>
-                                <option value="quarter" ${state.kellyType === 'quarter' ? 'selected' : ''}>Quarter Kelly</option>
-                                <option value="full" ${state.kellyType === 'full' ? 'selected' : ''}>Full Kelly</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Коефициент</label>
-                            <input type="text" id="odds" value="${state.odds}" placeholder="напр. 1.5"
-                                class="w-full p-3 border-2 border-gray-300 rounded-lg" />
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Вероятност (%)</label>
-                            <input type="text" id="winProb" value="${state.winProb}" placeholder="напр. 80"
-                                class="w-full p-3 border-2 border-gray-300 rounded-lg" />
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Сума за Залог</label>
-                            <div class="p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg text-xl font-bold text-yellow-800">
-                                ${suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---'}
-                            </div>
-                        </div>
-                        
-                        <div class="flex items-end">
-                            <button onclick="addStake()" ${!state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue) || state.syncing ? 'disabled' : ''}
-                                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-semibold transition">
-                                ➕ Добави
-                            </button>
-                        </div>
-                    </div>
-
-                    ${edgeInfo && !edgeInfo.hasValue ? `
-                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
-                            <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
-                            <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
-                        </div>
-                    ` : ''}
-
-                    ${edgeInfo && edgeInfo.hasValue && suggestedAmount > 0 ? `
-                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
-                            <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
-                            <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
-                        </div>
-                    ` : ''}
-                </div>
-
-                ${pendingStakes.length > 0 ? `
-                    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 border-2 border-orange-200">
-                        <h2 class="text-xl font-bold text-gray-800 mb-4">Активни Залози (${pendingStakes.length})</h2>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead>
-                                    <tr class="bg-orange-100">
-                                        <th class="p-3 text-left">#</th>
-                                        <th class="p-3 text-left">Коеф.</th>
-                                        <th class="p-3 text-left">Залог</th>
-                                        <th class="p-3 text-left">Печалба</th>
-                                        <th class="p-3 text-left">Действие</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${pendingStakes.map(s => `
-                                        <tr class="border-b hover:bg-orange-50">
-                                            <td class="p-3 font-bold">${s.number}</td>
-                                            <td class="p-3">${s.odds}</td>
-                                            <td class="p-3 font-bold text-red-600">${s.stakeAmount.toFixed(2)} лв</td>
-                                            <td class="p-3 font-bold text-green-600">+${s.potentialWin.toFixed(2)} лв</td>
-                                            <td class="p-3">
-                                                <div class="flex gap-1">
-                                                    <button onclick="markResult(${s.id}, 'win')" 
-                                                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">Win</button>
-                                                    <button onclick="markResult(${s.id}, 'push')" 
-                                                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-sm">Push</button>
-                                                    <button onclick="markResult(${s.id}, 'lose')" 
-                                                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Lose</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${completedStakes.length > 0 ? `
-                    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 border-2 border-gray-200">
-                        <h2 class="text-xl font-bold text-gray-800 mb-4">Завършени Залози (${completedStakes.length})</h2>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm">
-                                <thead>
-                                    <tr class="bg-gray-100">
-                                        <th class="p-2 text-left">#</th>
-                                        <th class="p-2 text-left">Коеф.</th>
-                                        <th class="p-2 text-left">Залог</th>
-                                        <th class="p-2 text-left">Резултат</th>
-                                        <th class="p-2 text-left">Промяна</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${completedStakes.map(s => `
-                                        <tr class="border-b ${s.result === 'win' ? 'bg-green-50' : s.result === 'lose' ? 'bg-red-50' : 'bg-yellow-50'}">
-                                            <td class="p-2 font-bold">${s.number}</td>
-                                            <td class="p-2">${s.odds}</td>
-                                            <td class="p-2 font-semibold">${s.stakeAmount.toFixed(2)}</td>
-                                            <td class="p-2">
-                                                <span class="font-bold px-2 py-1 rounded text-xs ${
-                                                    s.result === 'win' ? 'bg-green-200 text-green-800' : 
-                                                    s.result === 'lose' ? 'bg-red-200 text-red-800' : 
-                                                    'bg-yellow-200 text-yellow-800'
-                                                }">
-                                                    ${s.result.toUpperCase()}
-                                                </span>
-                                            </td>
-                                            <td class="p-2 font-bold ${s.result === 'win' ? 'text-green-600' : s.result === 'lose' ? 'text-red-600' : 'text-yellow-600'}">
-                                                ${s.result === 'win' ? '+' + s.potentialWin.toFixed(2) : 
-                                                  s.result === 'lose' ? '-' + s.stakeAmount.toFixed(2) : 
-                                                  '+' + s.stakeAmount.toFixed(2)} лв
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                ` : ''}
-
-                <div class="flex gap-4 flex-wrap">
-                    <button onclick="resetAll()" ${state.syncing ? 'disabled' : ''} 
-                        class="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold shadow-lg">
-                        🔄 Рестартирай
-                    </button>
-                    <button onclick="exportData()" 
-                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg">
-                        📋 Копирай за Excel
-                    </button>
-                    <button onclick="loadFromSheet()" ${state.syncing ? 'disabled' : ''}
-                        class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-3 rounded-lg font-semibold shadow-lg">
-                        ☁️ Синхронизирай
-                    </button>
-                </div>
-            `;
-
-            document.getElementById('initialBank')?.addEventListener('change', async (e) => {
-                state.initialBank = parseFloat(e.target.value) || 0;
-                state.currentBank = state.initialBank;
-                state.stakes = [];
-                await saveToSheet();
-                render();
-            });
-
-            document.getElementById('kellyType')?.addEventListener('change', (e) => {
-                state.kellyType = e.target.value;
-                render();
-            });
-
-            document.getElementById('odds')?.addEventListener('input', (e) => {
-                state.odds = e.target.value;
-                clearTimeout(renderTimeout);
-                renderTimeout = setTimeout(() => render(), 500);
-            });
-
-            document.getElementById('winProb')?.addEventListener('input', (e) => {
-                state.winProb = e.target.value;
-                clearTimeout(renderTimeout);
-                renderTimeout = setTimeout(() => render(), 500);
-            });
             
-            if (activeId) {
-                const element = document.getElementById(activeId);
-                if (element) {
-                    element.focus();
-                    if (typeof selectionStart === 'number') {
-                        element.setSelectionRange(selectionStart, selectionEnd);
-                    }
-                }
-            }
+            document.getElementById('calculatorContent').innerHTML = `
+                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4">Текуща Банка: ${state.currentBank.toFixed(2)} лв</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                        <select id="kellyType" class="p-3 border-2 rounded-lg" onchange="updateKellyType(this.value)">
+                            <option value="half">Half Kelly</option>
+                            <option value="quarter">Quarter Kelly</option>
+                            <option value="full">Full Kelly</option>
+                        </select>
+                        
+                        <input type="text" id="odds" value="${state.odds}" placeholder="Коефициент"
+                            oninput="updateOdds(this.value)" class="p-3 border-2 rounded-lg">
+                        
+                        <input type="text" id="winProb" value="${state.winProb}" placeholder="Вероятност %"
+                            oninput="updateWinProb(this.value)" class="p-3 border-2 rounded-lg">
+                        
+                        <button onclick="addStake()" class="bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700">
+                            Добави Залог
+                        </button>
+                    </div>
+                    
+                    ${suggestedAmount > 0 ? `
+                        <div class="p-4 ${edgeInfo?.hasValue ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'} border-2 rounded-lg mb-4">
+                            <p class="font-bold">${edgeInfo?.hasValue ? '✅ Има VALUE!' : '❌ НЯМА VALUE!'}</p>
+                            <p>Edge: ${edgeInfo?.edgePercent.toFixed(2)}%</p>
+                            <p>Препоръчителен залог: ${suggestedAmount.toFixed(2)} лв</p>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${pendingStakes.length > 0 ? `
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h2 class="text-xl font-bold mb-4">Активни Залози (${pendingStakes.length})</h2>
+                        ${pendingStakes.map(s => `
+                            <div class="border-b py-3">
+                                <p><strong>#${s.number}</strong> - Коеф: ${s.odds} - Залог: ${s.stakeAmount.toFixed(2)} лв</p>
+                                <div class="flex gap-2 mt-2">
+                                    <button onclick="markResult('${s.id}', 'win')" class="bg-green-500 text-white px-3 py-1 rounded">Win</button>
+                                    <button onclick="markResult('${s.id}', 'push')" class="bg-yellow-500 text-white px-3 py-1 rounded">Push</button>
+                                    <button onclick="markResult('${s.id}', 'lose')" class="bg-red-500 text-white px-3 py-1 rounded">Lose</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
         }
 
-        window.addEventListener('DOMContentLoaded', async () => {
-            const saved = localStorage.getItem('kellyData');
-            if (saved) {
-                try {
-                    const data = JSON.parse(saved);
-                    state = { ...state, ...data };
-                } catch (e) {}
-            }
-            
-            render();
-            await loadFromSheet();
-        });
+        function renderAdminPanel(users, stakes) {
+            document.getElementById('calculatorContent').innerHTML = `
+                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <h2 class="text-2xl font-bold mb-4">👑 Admin Panel</h2>
+                    <p class="mb-4">Общо потребители: ${users.length}</p>
+                    
+                    ${users.map(user => {
+                        const userStakes = stakes.filter(s => s.userId === user.id);
+                        const wonStakes = userStakes.filter(s => s.result === 'win').length;
+                        const lostStakes = userStakes.filter(s => s.result === 'lose').length;
+                        const pendingStakes = userStakes.filter(s => s.result === 'pending').length;
+                        
+                        return `
+                            <div class="border-2 rounded-lg p-4 mb-4">
+                                <h3 class="text-xl font-bold mb-2">${user.username} (${user.email})</h3>
+                                <p>Залози: ${userStakes.length} | Win: ${wonStakes} | Lose: ${lostStakes} | Pending: ${pendingStakes}</p>
+                                
+                                ${userStakes.length > 0 ? `
+                                    <details class="mt-2">
+                                        <summary class="cursor-pointer text-blue-600 font-semibold">Виж залозите</summary>
+                                        <div class="mt-2">
+                                            ${userStakes.slice(0, 10).map(s => `
+                                                <p class="text-sm">Коеф: ${s.odds} | Залог: ${s.stakeAmount?.toFixed(2)} лв | ${s.result}</p>
+                                            `).join('')}
+                                        </div>
+                                    </details>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function updateKellyType(value) { state.kellyType = value; renderCalculator(); }
+        function updateOdds(value) { state.odds = value; setTimeout(renderCalculator, 500); }
+        function updateWinProb(value) { state.winProb = value; setTimeout(renderCalculator, 500); }
     </script>
 </body>
 </html>
