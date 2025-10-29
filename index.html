@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kelly Calculator</title>
+    <title>Kelly Calculator Pro</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,6 @@
     
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .sync-indicator { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
@@ -23,7 +22,7 @@
     <!-- Login/Register Screen -->
     <div id="authScreen" class="min-h-screen flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-            <h1 class="text-3xl font-bold text-center mb-8 text-blue-600">Kelly Calculator</h1>
+            <h1 class="text-3xl font-bold text-center mb-8 text-blue-600">⚽ Kelly Calculator Pro</h1>
             
             <div id="loginForm">
                 <h2 class="text-xl font-semibold mb-4">Вход</h2>
@@ -60,9 +59,7 @@
                 <button onclick="adminLogin()" class="w-full bg-purple-600 text-white p-3 rounded-lg font-semibold hover:bg-purple-700 mb-3">
                     Влез като Admin
                 </button>
-                <button onclick="hideAdminLogin()" class="w-full bg-gray-400 text-white p-2 rounded-lg">
-                    Назад
-                </button>
+                <button onclick="hideAdminLogin()" class="w-full bg-gray-400 text-white p-2 rounded-lg">Назад</button>
             </div>
             
             <div id="authError" class="mt-4 p-3 bg-red-100 text-red-700 rounded-lg hidden"></div>
@@ -74,7 +71,7 @@
         <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <div class="flex justify-between items-center">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-800">Kelly Calculator</h1>
+                    <h1 class="text-3xl font-bold text-gray-800">⚽ Kelly Calculator Pro</h1>
                     <p class="text-sm text-gray-600" id="userInfo"></p>
                 </div>
                 <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">
@@ -87,7 +84,6 @@
     </div>
 
     <script>
-        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyD_cE6Ek3L_l7wHRkrrmswlksUb1fLEWLA",
             authDomain: "kelly-calculator-fbf1a.firebaseapp.com",
@@ -98,12 +94,11 @@
             measurementId: "G-196ZJ43NT2"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
         
-        const ADMIN_PASSWORD = "Bold_9000"; // Admin парола
+        const ADMIN_PASSWORD = "Bold_9000";
         
         let currentUser = null;
         let isAdmin = false;
@@ -112,11 +107,13 @@
             currentBank: 1000,
             stakes: [],
             kellyType: 'half',
+            homeTeam: '',
+            awayTeam: '',
             odds: '',
             winProb: ''
         };
 
-        // Auth UI Functions
+        // Auth Functions
         function toggleAuth() {
             document.getElementById('loginForm').classList.toggle('hidden');
             document.getElementById('registerForm').classList.toggle('hidden');
@@ -139,7 +136,6 @@
             setTimeout(() => errorDiv.classList.add('hidden'), 5000);
         }
 
-        // Authentication
         async function register() {
             const username = document.getElementById('registerUsername').value;
             const email = document.getElementById('registerEmail').value;
@@ -155,6 +151,7 @@
                 await db.collection('users').doc(userCredential.user.uid).set({
                     username: username,
                     email: email,
+                    initialBank: 1000,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 showError('✅ Регистрацията е успешна!');
@@ -200,12 +197,13 @@
             }
         }
 
-        // Auth State Observer
         auth.onAuthStateChanged(async (user) => {
             if (user && !isAdmin) {
                 currentUser = user;
                 const userDoc = await db.collection('users').doc(user.uid).get();
                 const userData = userDoc.data();
+                
+                state.initialBank = userData.initialBank || 1000;
                 
                 document.getElementById('authScreen').classList.add('hidden');
                 document.getElementById('mainApp').classList.remove('hidden');
@@ -241,12 +239,36 @@
             const ev = (p * o) - 1;
             return {
                 hasValue: ev > 0,
-                edgePercent: ev * 100
+                edgePercent: ev * 100,
+                expectedValue: ev
             };
+        }
+
+        function calculateYield(profit, totalStaked) {
+            if (totalStaked === 0) return 0;
+            return (profit / totalStaked) * 100;
+        }
+
+        function calculateROI(currentBank, initialBank) {
+            if (initialBank === 0) return 0;
+            return ((currentBank - initialBank) / initialBank) * 100;
+        }
+
+        async function updateInitialBank(newBank) {
+            state.initialBank = newBank;
+            await db.collection('users').doc(currentUser.uid).update({
+                initialBank: newBank
+            });
+            renderCalculator();
         }
 
         async function addStake() {
             const stakeAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
+            
+            if (!state.homeTeam || !state.awayTeam) {
+                alert('Моля, въведете домакин и гост!');
+                return;
+            }
             
             if (stakeAmount <= 0 || stakeAmount > state.currentBank) {
                 alert('Невалидни данни!');
@@ -256,20 +278,25 @@
             const newStake = {
                 userId: currentUser.uid,
                 number: state.stakes.length + 1,
+                homeTeam: state.homeTeam,
+                awayTeam: state.awayTeam,
                 kellyType: state.kellyType,
                 odds: parseFloat(String(state.odds).replace(',', '.')),
                 winProb: parseFloat(String(state.winProb).replace(',', '.')),
                 stakeAmount: stakeAmount,
                 potentialWin: stakeAmount * parseFloat(String(state.odds).replace(',', '.')),
+                potentialProfit: (stakeAmount * parseFloat(String(state.odds).replace(',', '.'))) - stakeAmount,
                 result: 'pending',
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
 
             await db.collection('stakes').add(newStake);
             state.currentBank -= stakeAmount;
+            state.homeTeam = '';
+            state.awayTeam = '';
             state.odds = '';
             state.winProb = '';
-            loadUserCalculator();
+            await loadUserCalculator();
         }
 
         async function markResult(stakeId, result) {
@@ -284,30 +311,37 @@
                 state.currentBank += stake.stakeAmount;
             }
             
-            loadUserCalculator();
+            await loadUserCalculator();
         }
 
         async function loadUserCalculator() {
             try {
                 const stakesSnapshot = await db.collection('stakes')
                     .where('userId', '==', currentUser.uid)
-                    .orderBy('timestamp', 'desc')
                     .get();
                 
                 state.stakes = [];
+                let tempBank = state.initialBank;
+                
                 stakesSnapshot.forEach(doc => {
                     const data = doc.data();
-                    state.stakes.push({ 
+                    const stake = { 
                         id: doc.id, 
                         ...data,
                         timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
-                    });
+                    };
+                    state.stakes.push(stake);
+                    
+                    // Recalculate current bank
+                    tempBank -= stake.stakeAmount;
+                    if (stake.result === 'win') tempBank += stake.potentialWin;
+                    else if (stake.result === 'push') tempBank += stake.stakeAmount;
                 });
                 
+                state.currentBank = tempBank;
                 renderCalculator();
             } catch (error) {
-                console.error('Error loading stakes:', error);
-                // Ако няма index, просто рендирай празен калкулатор
+                console.error('Error:', error);
                 renderCalculator();
             }
         }
@@ -316,7 +350,7 @@
             document.getElementById('userInfo').textContent = '👑 Admin Mode';
             
             const usersSnapshot = await db.collection('users').get();
-            const stakesSnapshot = await db.collection('stakes').orderBy('timestamp', 'desc').get();
+            const stakesSnapshot = await db.collection('stakes').get();
             
             const users = [];
             usersSnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
@@ -338,93 +372,180 @@
             const suggestedAmount = state.odds && state.winProb ? calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank) : 0;
             const edgeInfo = state.odds && state.winProb ? calculateEdge(state.odds, state.winProb) : null;
             const pendingStakes = state.stakes.filter(s => s.result === 'pending');
+            const completedStakes = state.stakes.filter(s => s.result !== 'pending');
             
+            // Statistics
+            const wonStakes = completedStakes.filter(s => s.result === 'win');
+            const lostStakes = completedStakes.filter(s => s.result === 'lose');
+            const totalStaked = completedStakes.reduce((sum, s) => sum + s.stakeAmount, 0);
+            const totalProfit = wonStakes.reduce((sum, s) => sum + s.potentialProfit, 0) - lostStakes.reduce((sum, s) => sum + s.stakeAmount, 0);
+            const yield_pct = calculateYield(totalProfit, totalStaked);
+            const roi = calculateROI(state.currentBank, state.initialBank);
+            const winRate = completedStakes.length > 0 ? (wonStakes.length / completedStakes.length * 100) : 0;
+            const avgOdds = completedStakes.length > 0 ? completedStakes.reduce((sum, s) => sum + s.odds, 0) / completedStakes.length : 0;
+
             document.getElementById('calculatorContent').innerHTML = `
-                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                    <h2 class="text-xl font-bold mb-4">Текуща Банка: ${state.currentBank.toFixed(2)} лв</h2>
+                <!-- Bank & Statistics -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-blue-200">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Начална Банка</label>
+                        <input type="number" value="${state.initialBank}" 
+                            onchange="updateInitialBank(parseFloat(this.value))"
+                            class="w-full text-2xl font-bold text-blue-600 border-2 border-blue-300 rounded-lg p-2">
+                    </div>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                        <select id="kellyType" class="p-3 border-2 rounded-lg" onchange="updateKellyType(this.value)">
-                            <option value="half">Half Kelly</option>
-                            <option value="quarter">Quarter Kelly</option>
-                            <option value="full">Full Kelly</option>
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 border-green-200">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Текуща Банка</label>
+                        <div class="text-3xl font-bold text-green-600">${state.currentBank.toFixed(2)} лв</div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 ${roi >= 0 ? 'border-green-300' : 'border-red-300'}">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">ROI</label>
+                        <div class="text-3xl font-bold ${roi >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl p-5 shadow-lg border-2 ${yield_pct >= 0 ? 'border-green-300' : 'border-red-300'}">
+                        <label class="block text-sm font-medium text-gray-600 mb-2">Yield</label>
+                        <div class="text-3xl font-bold ${yield_pct >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${yield_pct >= 0 ? '+' : ''}${yield_pct.toFixed(2)}%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">Общо Залози</p>
+                        <p class="text-2xl font-bold">${state.stakes.length}</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">Win Rate</p>
+                        <p class="text-2xl font-bold text-green-600">${winRate.toFixed(1)}%</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">W / L / P</p>
+                        <p class="text-2xl font-bold">${wonStakes.length} / ${lostStakes.length} / ${pendingStakes.length}</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">Среден Коефициент</p>
+                        <p class="text-2xl font-bold">${avgOdds.toFixed(2)}</p>
+                    </div>
+                </div>
+                
+                <!-- Add Stake Form -->
+                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4">Добави Нов Залог</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <input type="text" value="${state.homeTeam}" placeholder="Домакин"
+                            oninput="state.homeTeam = this.value"
+                            class="p-3 border-2 rounded-lg">
+                        
+                        <input type="text" value="${state.awayTeam}" placeholder="Гост"
+                            oninput="state.awayTeam = this.value"
+                            class="p-3 border-2 rounded-lg">
+                        
+                        <select onchange="state.kellyType = this.value; renderCalculator()" class="p-3 border-2 rounded-lg">
+                            <option value="half" ${state.kellyType === 'half' ? 'selected' : ''}>Half Kelly</option>
+                            <option value="quarter" ${state.kellyType === 'quarter' ? 'selected' : ''}>Quarter Kelly</option>
+                            <option value="full" ${state.kellyType === 'full' ? 'selected' : ''}>Full Kelly</option>
                         </select>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="text" value="${state.odds}" placeholder="Коефициент"
+                            oninput="state.odds = this.value; setTimeout(renderCalculator, 500)"
+                            class="p-3 border-2 rounded-lg">
                         
-                        <input type="text" id="odds" value="${state.odds}" placeholder="Коефициент"
-                            oninput="updateOdds(this.value)" class="p-3 border-2 rounded-lg">
+                        <input type="text" value="${state.winProb}" placeholder="Вероятност %"
+                            oninput="state.winProb = this.value; setTimeout(renderCalculator, 500)"
+                            class="p-3 border-2 rounded-lg">
                         
-                        <input type="text" id="winProb" value="${state.winProb}" placeholder="Вероятност %"
-                            oninput="updateWinProb(this.value)" class="p-3 border-2 rounded-lg">
+                        <div class="p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg font-bold text-yellow-800">
+                            ${suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---'}
+                        </div>
                         
-                        <button onclick="addStake()" class="bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700">
-                            Добави Залог
+                        <button onclick="addStake()" 
+                            class="bg-blue-600 text-white p-3 rounded-lg font-semibold hover:bg-blue-700">
+                            ➕ Добави Залог
                         </button>
                     </div>
                     
-                    ${suggestedAmount > 0 ? `
-                        <div class="p-4 ${edgeInfo?.hasValue ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'} border-2 rounded-lg mb-4">
-                            <p class="font-bold">${edgeInfo?.hasValue ? '✅ Има VALUE!' : '❌ НЯМА VALUE!'}</p>
-                            <p>Edge: ${edgeInfo?.edgePercent.toFixed(2)}%</p>
-                            <p>Препоръчителен залог: ${suggestedAmount.toFixed(2)} лв</p>
+                    ${edgeInfo && edgeInfo.hasValue && suggestedAmount > 0 ? `
+                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                            <p class="font-bold text-green-800">✅ Има VALUE! Edge: +${edgeInfo.edgePercent.toFixed(2)}%</p>
+                            <p class="text-sm text-gray-700">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
+                        </div>
+                    ` : edgeInfo && !edgeInfo.hasValue ? `
+                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
+                            <p class="font-bold text-red-800">❌ НЯМА VALUE! Edge: ${edgeInfo.edgePercent.toFixed(2)}%</p>
                         </div>
                     ` : ''}
                 </div>
                 
+                <!-- Pending Stakes -->
                 ${pendingStakes.length > 0 ? `
-                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
                         <h2 class="text-xl font-bold mb-4">Активни Залози (${pendingStakes.length})</h2>
-                        ${pendingStakes.map(s => `
-                            <div class="border-b py-3">
-                                <p><strong>#${s.number}</strong> - Коеф: ${s.odds} - Залог: ${s.stakeAmount.toFixed(2)} лв</p>
-                                <div class="flex gap-2 mt-2">
-                                    <button onclick="markResult('${s.id}', 'win')" class="bg-green-500 text-white px-3 py-1 rounded">Win</button>
-                                    <button onclick="markResult('${s.id}', 'push')" class="bg-yellow-500 text-white px-3 py-1 rounded">Push</button>
-                                    <button onclick="markResult('${s.id}', 'lose')" class="bg-red-500 text-white px-3 py-1 rounded">Lose</button>
-                                </div>
-                            </div>
-                        `).join('')}
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="bg-orange-100">
+                                        <th class="p-3 text-left">#</th>
+                                        <th class="p-3 text-left">Мач</th>
+                                        <th class="p-3 text-left">Коеф.</th>
+                                        <th class="p-3 text-left">Залог</th>
+                                        <th class="p-3 text-left">Печалба</th>
+                                        <th class="p-3 text-left">Действие</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${pendingStakes.map(s => `
+                                        <tr class="border-b hover:bg-orange-50">
+                                            <td class="p-3 font-bold">${s.number}</td>
+                                            <td class="p-3">${s.homeTeam} vs ${s.awayTeam}</td>
+                                            <td class="p-3 font-semibold">${s.odds}</td>
+                                            <td class="p-3 font-bold text-red-600">${s.stakeAmount.toFixed(2)} лв</td>
+                                            <td class="p-3 font-bold text-green-600">+${s.potentialProfit.toFixed(2)} лв</td>
+                                            <td class="p-3">
+                                                <div class="flex gap-1">
+                                                    <button onclick="markResult('${s.id}', 'win')" class="bg-green-500 text-white px-3 py-1 rounded text-sm">Win</button>
+                                                    <button onclick="markResult('${s.id}', 'push')" class="bg-yellow-500 text-white px-2 py-1 rounded text-sm">Push</button>
+                                                    <button onclick="markResult('${s.id}', 'lose')" class="bg-red-500 text-white px-3 py-1 rounded text-sm">Lose</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 ` : ''}
-            `;
-        }
 
-        function renderAdminPanel(users, stakes) {
-            document.getElementById('calculatorContent').innerHTML = `
-                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                    <h2 class="text-2xl font-bold mb-4">👑 Admin Panel</h2>
-                    <p class="mb-4">Общо потребители: ${users.length}</p>
-                    
-                    ${users.map(user => {
-                        const userStakes = stakes.filter(s => s.userId === user.id);
-                        const wonStakes = userStakes.filter(s => s.result === 'win').length;
-                        const lostStakes = userStakes.filter(s => s.result === 'lose').length;
-                        const pendingStakes = userStakes.filter(s => s.result === 'pending').length;
-                        
-                        return `
-                            <div class="border-2 rounded-lg p-4 mb-4">
-                                <h3 class="text-xl font-bold mb-2">${user.username} (${user.email})</h3>
-                                <p>Залози: ${userStakes.length} | Win: ${wonStakes} | Lose: ${lostStakes} | Pending: ${pendingStakes}</p>
-                                
-                                ${userStakes.length > 0 ? `
-                                    <details class="mt-2">
-                                        <summary class="cursor-pointer text-blue-600 font-semibold">Виж залозите</summary>
-                                        <div class="mt-2">
-                                            ${userStakes.slice(0, 10).map(s => `
-                                                <p class="text-sm">Коеф: ${s.odds} | Залог: ${s.stakeAmount?.toFixed(2)} лв | ${s.result}</p>
-                                            `).join('')}
-                                        </div>
-                                    </details>
-                                ` : ''}
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
-        }
-
-        function updateKellyType(value) { state.kellyType = value; renderCalculator(); }
-        function updateOdds(value) { state.odds = value; setTimeout(renderCalculator, 500); }
-        function updateWinProb(value) { state.winProb = value; setTimeout(renderCalculator, 500); }
-    </script>
-</body>
-</html>
+                <!-- Completed Stakes -->
+                ${completedStakes.length > 0 ? `
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h2 class="text-xl font-bold mb-4">История (${completedStakes.length})</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="p-2 text-left">#</th>
+                                        <th class="p-2 text-left">Мач</th>
+                                        <th class="p-2 text-left">Коеф.</th>
+                                        <th class="p-2 text-left">Залог</th>
+                                        <th class="p-2 text-left">Резултат</th>
+                                        <th class="p-2 text-left">Profit/Loss</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${completedStakes.slice(0, 20).map(s => `
+                                        <tr class="border-b ${s.result === 'win' ? 'bg-green-50' : s.result === 'lose' ? 'bg-red-50' : 'bg-yellow-50'}">
+                                            <td class="p-2 font-bold">${s.number}</td>
+                                            <td class="p-2">${s.homeTeam} - ${s.awayTeam}</td>
+                                            <td class="p-2">${s.odds}</td>
+                                            <td class="p-2">${s.stakeAmount.toFixed(2)}</td>
+                                            <td class="p-2">
+                                                <span class="font-bold px-2 py-1
