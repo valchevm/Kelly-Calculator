@@ -295,7 +295,12 @@
             
             state.stakes = [];
             stakesSnapshot.forEach(doc => {
-                state.stakes.push({ id: doc.id, ...doc.data() });
+                const data = doc.data();
+                state.stakes.push({ 
+                    id: doc.id, 
+                    ...data,
+                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+                });
             });
             
             renderCalculator();
@@ -305,13 +310,20 @@
             document.getElementById('userInfo').textContent = '👑 Admin Mode';
             
             const usersSnapshot = await db.collection('users').get();
-            const stakesSnapshot = await db.collection('stakes').get();
+            const stakesSnapshot = await db.collection('stakes').orderBy('timestamp', 'desc').get();
             
             const users = [];
             usersSnapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() }));
             
             const allStakes = [];
-            stakesSnapshot.forEach(doc => allStakes.push({ id: doc.id, ...doc.data() }));
+            stakesSnapshot.forEach(doc => {
+                const data = doc.data();
+                allStakes.push({ 
+                    id: doc.id, 
+                    ...data,
+                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+                });
+            });
             
             renderAdminPanel(users, allStakes);
         }
