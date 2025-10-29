@@ -317,12 +317,12 @@
             try {
                 const stakesSnapshot = await db.collection('stakes')
                     .where('userId', '==', currentUser.uid)
-                    .orderBy('timestamp', 'desc')
                     .get();
                 
                 state.stakes = [];
                 let tempBank = state.initialBank;
                 
+                const stakesArray = [];
                 stakesSnapshot.forEach(doc => {
                     const data = doc.data();
                     const stake = { 
@@ -330,11 +330,17 @@
                         ...data,
                         timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
                     };
-                    state.stakes.push(stake);
-                    
-                    tempBank -= stake.stakeAmount;
-                    if (stake.result === 'win') tempBank += stake.potentialWin;
-                    else if (stake.result === 'push') tempBank += stake.stakeAmount;
+                    stakesArray.push(stake);
+                });
+                
+                // Sort by timestamp descending
+                stakesArray.sort((a, b) => b.timestamp - a.timestamp);
+                state.stakes = stakesArray;
+                
+                stakesArray.forEach(stake => {
+                    tempBank -= stake.stakeAmount || 0;
+                    if (stake.result === 'win') tempBank += stake.potentialWin || 0;
+                    else if (stake.result === 'push') tempBank += stake.stakeAmount || 0;
                 });
                 
                 state.currentBank = tempBank;
