@@ -211,7 +211,7 @@
                 document.getElementById('mainApp').classList.remove('hidden');
                 document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
                 
-                loadUserCalculator();
+                await loadUserCalculator();
             } else if (!isAdmin) {
                 document.getElementById('authScreen').classList.remove('hidden');
                 document.getElementById('mainApp').classList.add('hidden');
@@ -288,22 +288,28 @@
         }
 
         async function loadUserCalculator() {
-            const stakesSnapshot = await db.collection('stakes')
-                .where('userId', '==', currentUser.uid)
-                .orderBy('timestamp', 'desc')
-                .get();
-            
-            state.stakes = [];
-            stakesSnapshot.forEach(doc => {
-                const data = doc.data();
-                state.stakes.push({ 
-                    id: doc.id, 
-                    ...data,
-                    timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+            try {
+                const stakesSnapshot = await db.collection('stakes')
+                    .where('userId', '==', currentUser.uid)
+                    .orderBy('timestamp', 'desc')
+                    .get();
+                
+                state.stakes = [];
+                stakesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    state.stakes.push({ 
+                        id: doc.id, 
+                        ...data,
+                        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+                    });
                 });
-            });
-            
-            renderCalculator();
+                
+                renderCalculator();
+            } catch (error) {
+                console.error('Error loading stakes:', error);
+                // Ако няма index, просто рендирай празен калкулатор
+                renderCalculator();
+            }
         }
 
         async function loadAdminPanel() {
