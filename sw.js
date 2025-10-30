@@ -1,7 +1,8 @@
-const CACHE_NAME = 'kelly-calculator-v1';
+const CACHE_NAME = 'kelly-calculator-v3';
 const urlsToCache = [
   '/Kelly-Calculator/',
-  '/Kelly-Calculator/index.html'
+  '/Kelly-Calculator/index.html',
+  '/Kelly-Calculator/manifest.json'
 ];
 
 self.addEventListener('install', event => {
@@ -9,6 +10,7 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(urlsToCache))
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
