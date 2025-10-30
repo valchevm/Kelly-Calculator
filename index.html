@@ -12,6 +12,10 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- Eruda Console for Mobile Debugging -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+    
     <!-- Firebase SDK v9 Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -430,6 +434,18 @@
             }
         }
 
+        async function exportMyStakes() {
+            if (!currentUser) return;
+            try {
+                const userDoc = await db.collection('users').doc(currentUser.uid).get();
+                const userData = userDoc.data();
+                const username = userData.username || 'User';
+                exportToExcel(state.stakes, username);
+            } catch (error) {
+                alert('Грешка: ' + error.message);
+            }
+        }
+
         async function loadUserCalculator() {
             try {
                 const stakesSnapshot = await db.collection('stakes')
@@ -692,7 +708,7 @@
                     <div class="bg-white rounded-2xl shadow-xl p-6">
                         <div class="flex justify-between items-center mb-4">
                             <h2 class="text-xl font-bold">📊 История (${completedStakes.length})</h2>
-                            <button onclick="exportToExcel(state.stakes, '${currentUser ? (await db.collection('users').doc(currentUser.uid).get()).data().username : 'User'}')" 
+                            <button onclick="exportMyStakes()" 
                                 class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold">
                                 📥 Изтегли Excel
                             </button>
