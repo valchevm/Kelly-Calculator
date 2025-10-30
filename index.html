@@ -17,9 +17,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
-    <!-- Google Charts API -->
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         .pulse-animation {
@@ -158,7 +155,6 @@
         
         let currentUser = null;
         let isAdmin = false;
-        let googleChartsLoaded = false;
         let state = {
             initialBank: 1000,
             currentBank: 1000,
@@ -167,15 +163,8 @@
             homeTeam: '',
             awayTeam: '',
             odds: '',
-            winProb: '',
-            timeRange: 'all'
+            winProb: ''
         };
-
-        // Load Google Charts
-        google.charts.load('current', {'packages':['corechart']});
-        google.charts.setOnLoadCallback(() => {
-            googleChartsLoaded = true;
-        });
 
         // Auth Functions
         function toggleAuth() {
@@ -292,6 +281,39 @@
             
             let multiplier = kellyType === 'half' ? 0.5 : kellyType === 'quarter' ? 0.25 : 1;
             return Math.max(0, bank * kellyFraction * multiplier);
+        }
+
+        function updateStakeSuggestion() {
+            const suggestedAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
+            const edgeInfo = calculateEdge(state.odds, state.winProb);
+            
+            const suggestionEl = document.getElementById('suggestedStake');
+            const edgeEl = document.getElementById('edgeInfo');
+            
+            if (suggestionEl) {
+                suggestionEl.textContent = suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---';
+            }
+            
+            if (edgeEl) {
+                if (edgeInfo && edgeInfo.hasValue && suggestedAmount > 0) {
+                    edgeEl.innerHTML = `
+                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                            <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
+                            <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                            <p class="text-sm text-gray-700 mt-2">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
+                        </div>
+                    `;
+                } else if (edgeInfo && !edgeInfo.hasValue) {
+                    edgeEl.innerHTML = `
+                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
+                            <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
+                            <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                        </div>
+                    `;
+                } else {
+                    edgeEl.innerHTML = '';
+                }
+            }
         }
 
         function calculateEdge(odds, winProb) {
@@ -646,21 +668,21 @@
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Коефициент</label>
-                            <input type="text" value="${state.odds}" placeholder="1.5"
-                                oninput="state.odds = this.value; setTimeout(renderCalculator, 500)"
+                            <input type="text" id="oddsInput" value="${state.odds}" placeholder="1.5"
+                                oninput="state.odds = this.value; updateStakeSuggestion()"
                                 class="w-full p-3 border-2 border-gray-300 rounded-lg">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Вероятност %</label>
-                            <input type="text" value="${state.winProb}" placeholder="80"
-                                oninput="state.winProb = this.value; setTimeout(renderCalculator, 500)"
+                            <input type="text" id="winProbInput" value="${state.winProb}" placeholder="80"
+                                oninput="state.winProb = this.value; updateStakeSuggestion()"
                                 class="w-full p-3 border-2 border-gray-300 rounded-lg">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Сума за Залог</label>
-                            <div class="p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg text-lg font-bold text-yellow-800 text-center">
+                            <div id="suggestedStake" class="p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg text-lg font-bold text-yellow-800 text-center">
                                 ${suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---'}
                             </div>
                         </div>
@@ -673,20 +695,22 @@
                         </div>
                     </div>
 
-                    ${edgeInfo && !edgeInfo.hasValue ? `
-                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
-                            <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
-                            <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
-                        </div>
-                    ` : ''}
+                    <div id="edgeInfo">
+                        ${edgeInfo && !edgeInfo.hasValue ? `
+                            <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
+                                <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
+                                <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                            </div>
+                        ` : ''}
 
-                    ${edgeInfo && edgeInfo.hasValue && suggestedAmount > 0 ? `
-                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
-                            <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
-                            <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
-                            <p class="text-sm text-gray-700 mt-2">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
-                        </div>
-                    ` : ''}
+                        ${edgeInfo && edgeInfo.hasValue && suggestedAmount > 0 ? `
+                            <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                                <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
+                                <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                                <p class="text-sm text-gray-700 mt-2">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
 
                 ${pendingStakes.length > 0 ? `
