@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kelly Calculator Pro</title>
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Kelly Calc">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Firebase SDK v9 Compat -->
@@ -14,6 +19,13 @@
     
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
@@ -21,7 +33,15 @@
     <!-- Login/Register Screen -->
     <div id="authScreen" class="min-h-screen flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-            <h1 class="text-3xl font-bold text-center mb-8 text-blue-600">⚽ Kelly Calculator Pro</h1>
+            <h1 class="text-3xl font-bold text-center mb-2 text-blue-600">⚽ Kelly Calculator Pro</h1>
+            <p class="text-center text-gray-500 text-sm mb-6">Професионален залагателен калкулатор</p>
+            
+            <!-- Install Button - Always visible -->
+            <div class="mb-6">
+                <button onclick="installPWA()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 shadow-lg transform transition hover:scale-105">
+                    📱 Инсталирай като приложение
+                </button>
+            </div>
             
             <div id="loginForm">
                 <h2 class="text-xl font-semibold mb-4">Вход</h2>
@@ -83,6 +103,40 @@
     </div>
 
     <script>
+        // PWA Install
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+
+        async function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log('Install outcome:', outcome);
+                // Не скриваме бутона
+            } else {
+                // За iOS или ако приложението вече е инсталирано
+                if (navigator.userAgent.match(/iPhone|iPad|iPod/)) {
+                    alert('За да инсталирате на iOS:\n\n1. Натиснете бутона "Share" ⬆️\n2. Scroll надолу и изберете "Add to Home Screen"\n3. Натиснете "Add"\n\nПриложението ще се появи на началния екран!');
+                } else if (window.matchMedia('(display-mode: standalone)').matches) {
+                    alert('✅ Приложението вече е инсталирано!');
+                } else {
+                    alert('За да инсталирате:\n\n• Chrome/Edge: Меню (⋮) → Install app\n• Safari iOS: Share (⬆️) → Add to Home Screen\n• Firefox: Меню → Install');
+                }
+            }
+        }
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+
         const firebaseConfig = {
             apiKey: "AIzaSyD_cE6Ek3L_l7wHRkrrmswlksUb1fLEWLA",
             authDomain: "kelly-calculator-fbf1a.firebaseapp.com",
@@ -312,6 +366,68 @@
             }
             
             await loadUserCalculator();
+        }
+
+        function exportToExcel(stakes, username = 'User') {
+            let csv = 'Залог №\tДомакин\tГост\tKelly\tКоеф.\tВер.%\tЗалог лв\tПечалба лв\tРезултат\tВреме\n';
+            
+            stakes.forEach(s => {
+                csv += `${s.number || 0}\t${s.homeTeam || 'N/A'}\t${s.awayTeam || 'N/A'}\t${s.kellyType || 'half'}\t${(s.odds || 0).toFixed(2)}\t${(s.winProb || 0).toFixed(1)}\t${(s.stakeAmount || 0).toFixed(2)}\t${(s.potentialProfit || 0).toFixed(2)}\t${s.result || 'pending'}\t${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}\n`;
+            });
+            
+            const completedStakes = stakes.filter(s => s.result !== 'pending');
+            const wonStakes = completedStakes.filter(s => s.result === 'win');
+            const lostStakes = completedStakes.filter(s => s.result === 'lose');
+            const totalStaked = completedStakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
+            const totalProfit = wonStakes.reduce((sum, s) => sum + (s.potentialProfit || 0), 0) - lostStakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
+            const winRate = completedStakes.length > 0 ? (wonStakes.length / completedStakes.length * 100) : 0;
+            
+            csv += '\n\nРезюме\n';
+            csv += `Потребител\t${username}\n`;
+            csv += `Общо Залози\t${stakes.length}\n`;
+            csv += `Завършени\t${completedStakes.length}\n`;
+            csv += `Спечелени\t${wonStakes.length}\n`;
+            csv += `Загубени\t${lostStakes.length}\n`;
+            csv += `Win Rate\t${winRate.toFixed(1)}%\n`;
+            csv += `Обща Сума\t${totalStaked.toFixed(2)} лв\n`;
+            csv += `Печалба/Загуба\t${totalProfit.toFixed(2)} лв\n`;
+            
+            navigator.clipboard.writeText(csv).then(() => {
+                alert('✅ Данните са копирани! Отвори Excel и натисни Ctrl+V за да ги постнеш.');
+            }).catch(() => {
+                const blob = new Blob([csv], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `kelly_calculator_${username}_${new Date().toISOString().split('T')[0]}.txt`;
+                a.click();
+            });
+        }
+
+        async function exportUserStakes(userId) {
+            try {
+                const userDoc = await db.collection('users').doc(userId).get();
+                const userData = userDoc.data();
+                const username = userData.username || 'User';
+                
+                const stakesSnapshot = await db.collection('stakes')
+                    .where('userId', '==', userId)
+                    .get();
+                
+                const stakes = [];
+                stakesSnapshot.forEach(doc => {
+                    const data = doc.data();
+                    stakes.push({
+                        ...data,
+                        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : new Date()
+                    });
+                });
+                
+                stakes.sort((a, b) => b.timestamp - a.timestamp);
+                exportToExcel(stakes, username);
+            } catch (error) {
+                alert('Грешка при експортиране: ' + error.message);
+            }
         }
 
         async function loadUserCalculator() {
@@ -574,7 +690,13 @@
 
                 ${completedStakes.length > 0 ? `
                     <div class="bg-white rounded-2xl shadow-xl p-6">
-                        <h2 class="text-xl font-bold mb-4">📊 История (${completedStakes.length})</h2>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">📊 История (${completedStakes.length})</h2>
+                            <button onclick="exportToExcel(state.stakes, '${currentUser ? (await db.collection('users').doc(currentUser.uid).get()).data().username : 'User'}')" 
+                                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold">
+                                📥 Изтегли Excel
+                            </button>
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>
@@ -650,6 +772,7 @@
                                     <th class="p-3 text-left">Email</th>
                                     <th class="p-3 text-left">Начална Банка</th>
                                     <th class="p-3 text-left">Залози</th>
+                                    <th class="p-3 text-left">Действие</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -661,6 +784,12 @@
                                             <td class="p-3">${u.email || 'N/A'}</td>
                                             <td class="p-3 font-bold text-blue-600">${u.initialBank || 1000} лв</td>
                                             <td class="p-3 font-bold text-green-600">${userStakes.length}</td>
+                                            <td class="p-3">
+                                                <button onclick="exportUserStakes('${u.id}')" 
+                                                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                                    📥 Excel
+                                                </button>
+                                            </td>
                                         </tr>
                                     `;
                                 }).join('')}
