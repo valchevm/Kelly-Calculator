@@ -17,8 +17,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
-    <!-- Chart.js for graphs -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Google Charts API -->
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -158,7 +158,7 @@
         
         let currentUser = null;
         let isAdmin = false;
-        let bankChart = null;
+        let googleChartsLoaded = false;
         let state = {
             initialBank: 1000,
             currentBank: 1000,
@@ -170,6 +170,12 @@
             winProb: '',
             timeRange: 'all'
         };
+
+        // Load Google Charts
+        google.charts.load('current', {'packages':['corechart']});
+        google.charts.setOnLoadCallback(() => {
+            googleChartsLoaded = true;
+        });
 
         // Auth Functions
         function toggleAuth() {
@@ -605,7 +611,7 @@
                         </select>
                     </div>
                     <div style="height: 300px; position: relative;">
-                        <canvas id="bankChart"></canvas>
+                        <div id="bankChart" style="width: 100%; height: 100%;"></div>
                     </div>
                 </div>
                 
