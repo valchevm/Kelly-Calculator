@@ -287,9 +287,24 @@
             
             const suggestionEl = document.getElementById('suggestedStake');
             const edgeEl = document.getElementById('edgeInfo');
+            const addButton = document.querySelector('button[onclick="addStake()"]');
             
             if (suggestionEl) {
                 suggestionEl.textContent = suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---';
+            }
+            
+            // Update button state
+            if (addButton) {
+                const shouldDisable = !state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue);
+                if (shouldDisable) {
+                    addButton.setAttribute('disabled', 'disabled');
+                    addButton.classList.add('bg-gray-400');
+                    addButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                } else {
+                    addButton.removeAttribute('disabled');
+                    addButton.classList.remove('bg-gray-400');
+                    addButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                }
             }
             
             if (edgeEl) {
@@ -668,7 +683,7 @@
                         </div>
                         
                         <div class="flex items-end">
-                            <button onclick="addStake()" ${!state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue) ? 'disabled' : ''}
+                            <button onclick="addStake()" 
                                 class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-semibold transition">
                                 ➕ Добави
                             </button>
