@@ -554,17 +554,22 @@
         }
 
         function renderCalculator() {
+            // Safety check
+            if (!state.stakes) {
+                state.stakes = [];
+            }
+            
             const suggestedAmount = state.odds && state.winProb ? calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank) : 0;
             const edgeInfo = state.odds && state.winProb ? calculateEdge(state.odds, state.winProb) : null;
-            const pendingStakes = state.stakes.filter(s => s.result === 'pending');
-            const completedStakes = state.stakes.filter(s => s.result !== 'pending');
+            const pendingStakes = state.stakes.filter(s => s && s.result === 'pending');
+            const completedStakes = state.stakes.filter(s => s && s.result !== 'pending');
             
             const wonStakes = completedStakes.filter(s => s.result === 'win');
             const lostStakes = completedStakes.filter(s => s.result === 'lose');
             const totalStaked = completedStakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
             const totalProfit = wonStakes.reduce((sum, s) => sum + (s.potentialProfit || 0), 0) - lostStakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
             const yield_pct = calculateYield(totalProfit, totalStaked);
-            const roi = calculateROI(state.currentBank, state.initialBank);
+            const roi = calculateROI(state.currentBank || state.initialBank, state.initialBank);
             const winRate = completedStakes.length > 0 ? (wonStakes.length / completedStakes.length * 100) : 0;
             const avgOdds = completedStakes.length > 0 ? completedStakes.reduce((sum, s) => sum + (s.odds || 0), 0) / completedStakes.length : 0;
 
@@ -591,4 +596,320 @@
                     
                     <div class="bg-white rounded-xl p-5 shadow-lg border-2 ${yield_pct >= 0 ? 'border-green-300' : 'border-red-300'}">
                         <label class="block text-sm font-medium text-gray-600 mb-2">Yield</label>
-                        <div class="text-3xl font-bold ${yield_pct >= 0 ?
+                        <div class="text-3xl font-bold ${yield_pct >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${yield_pct >= 0 ? '+' : ''}${yield_pct.toFixed(2)}%
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">Общо Залози</p>
+                        <p class="text-2xl font-bold">${state.stakes.length}</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">Win Rate</p>
+                        <p class="text-2xl font-bold text-green-600">${winRate.toFixed(1)}%</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">W / L / P</p>
+                        <p class="text-xl font-bold">${wonStakes.length} / ${lostStakes.length} / ${pendingStakes.length}</p>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 shadow-lg">
+                        <p class="text-sm text-gray-600">Ср. Коеф.</p>
+                        <p class="text-2xl font-bold">${avgOdds.toFixed(2)}</p>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4">➕ Добави Нов Залог</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">🏠 Домакин</label>
+                            <input type="text" id="homeTeamInput" value="${state.homeTeam}" placeholder="напр. Ливърпул"
+                                class="w-full p-3 border-2 rounded-lg">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">✈️ Гост</label>
+                            <input type="text" id="awayTeamInput" value="${state.awayTeam}" placeholder="напр. Манчестър Сити"
+                                class="w-full p-3 border-2 rounded-lg">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Kelly Тип</label>
+                            <select id="kellyTypeSelect" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                                <option value="half" ${state.kellyType === 'half' ? 'selected' : ''}>Half Kelly</option>
+                                <option value="quarter" ${state.kellyType === 'quarter' ? 'selected' : ''}>Quarter Kelly</option>
+                                <option value="full" ${state.kellyType === 'full' ? 'selected' : ''}>Full Kelly</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Коефициент</label>
+                            <input type="text" id="oddsInput" value="${state.odds}" placeholder="1.5"
+                                class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Вероятност %</label>
+                            <input type="text" id="winProbInput" value="${state.winProb}" placeholder="80"
+                                class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Сума за Залог</label>
+                            <div id="suggestedStake" class="p-3 bg-yellow-50 border-2 border-yellow-400 rounded-lg text-lg font-bold text-yellow-800 text-center">
+                                ${suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---'}
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-end">
+                            <button onclick="addStake()" ${!state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue) ? 'disabled' : ''}
+                                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-semibold transition">
+                                ➕ Добави
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="edgeInfo">
+                        ${edgeInfo && !edgeInfo.hasValue ? `
+                            <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
+                                <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
+                                <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                            </div>
+                        ` : ''}
+
+                        ${edgeInfo && edgeInfo.hasValue && suggestedAmount > 0 ? `
+                            <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                                <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
+                                <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                                <p class="text-sm text-gray-700 mt-2">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                ${pendingStakes.length > 0 ? `
+                    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                        <h2 class="text-xl font-bold mb-4">⏳ Активни Залози (${pendingStakes.length})</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="bg-orange-100">
+                                        <th class="p-3 text-left">#</th>
+                                        <th class="p-3 text-left">Мач</th>
+                                        <th class="p-3 text-left">Коеф.</th>
+                                        <th class="p-3 text-left">Залог</th>
+                                        <th class="p-3 text-left">Печалба</th>
+                                        <th class="p-3 text-left">Действие</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${pendingStakes.map(s => `
+                                        <tr class="border-b hover:bg-orange-50">
+                                            <td class="p-3 font-bold">${s.number || 0}</td>
+                                            <td class="p-3"><span class="font-semibold">${s.homeTeam || 'N/A'}</span> vs <span class="font-semibold">${s.awayTeam || 'N/A'}</span></td>
+                                            <td class="p-3 font-semibold">${(s.odds || 0).toFixed(2)}</td>
+                                            <td class="p-3 font-bold text-red-600">${(s.stakeAmount || 0).toFixed(2)} лв</td>
+                                            <td class="p-3 font-bold text-green-600">+${((s.potentialProfit || 0)).toFixed(2)} лв</td>
+                                            <td class="p-3">
+                                                <div class="flex gap-1">
+                                                    <button onclick="markResult('${s.id}', 'win')" 
+                                                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">Win</button>
+                                                    <button onclick="markResult('${s.id}', 'push')" 
+                                                        class="bg-yellow-500 hover:bg-yellow-600 text-white px-2 py-1 rounded text-sm">Push</button>
+                                                    <button onclick="markResult('${s.id}', 'lose')" 
+                                                        class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Lose</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${completedStakes.length > 0 ? `
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">📊 История (${completedStakes.length})</h2>
+                            <button onclick="exportMyStakes()" 
+                                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold">
+                                📥 Изтегли Excel
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="p-2 text-left">#</th>
+                                        <th class="p-2 text-left">Мач</th>
+                                        <th class="p-2 text-left">Коеф.</th>
+                                        <th class="p-2 text-left">Залог</th>
+                                        <th class="p-2 text-left">Резултат</th>
+                                        <th class="p-2 text-left">Profit/Loss</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${completedStakes.slice(0, 20).map(s => `
+                                        <tr class="border-b ${s.result === 'win' ? 'bg-green-50' : s.result === 'lose' ? 'bg-red-50' : 'bg-yellow-50'}">
+                                            <td class="p-2 font-bold">${s.number || 0}</td>
+                                            <td class="p-2"><span class="font-semibold">${s.homeTeam || 'N/A'}</span> - <span class="font-semibold">${s.awayTeam || 'N/A'}</span></td>
+                                            <td class="p-2">${(s.odds || 0).toFixed(2)}</td>
+                                            <td class="p-2">${(s.stakeAmount || 0).toFixed(2)}</td>
+                                            <td class="p-2">
+                                                <span class="font-bold px-2 py-1 rounded ${s.result === 'win' ? 'bg-green-200 text-green-800' : s.result === 'lose' ? 'bg-red-200 text-red-800' : 'bg-yellow-200 text-yellow-800'}">
+                                                    ${(s.result || 'PENDING').toUpperCase()}
+                                                </span>
+                                            </td>
+                                            <td class="p-2 font-bold ${s.result === 'win' ? 'text-green-600' : 'text-red-600'}">
+                                                ${s.result === 'win' ? '+' + ((s.potentialProfit || 0).toFixed(2)) : '-' + ((s.stakeAmount || 0).toFixed(2))} лв
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+            
+            // Add event listeners
+            document.getElementById('homeTeamInput')?.addEventListener('input', (e) => {
+                state.homeTeam = e.target.value;
+            });
+            
+            document.getElementById('awayTeamInput')?.addEventListener('input', (e) => {
+                state.awayTeam = e.target.value;
+            });
+            
+            document.getElementById('kellyTypeSelect')?.addEventListener('change', (e) => {
+                state.kellyType = e.target.value;
+                updateStakeSuggestion();
+            });
+            
+            document.getElementById('oddsInput')?.addEventListener('input', (e) => {
+                state.odds = e.target.value;
+                updateStakeSuggestion();
+            });
+            
+            document.getElementById('winProbInput')?.addEventListener('input', (e) => {
+                state.winProb = e.target.value;
+                updateStakeSuggestion();
+            });
+        }
+
+        function renderAdminPanel(users, stakes) {
+            const totalUsers = users.length;
+            const totalStakes = stakes.length;
+            const totalAmount = stakes.reduce((sum, s) => sum + (s.stakeAmount || 0), 0);
+            const wonStakes = stakes.filter(s => s.result === 'win').length;
+            const lostStakes = stakes.filter(s => s.result === 'lose').length;
+            const pendingStakes = stakes.filter(s => s.result === 'pending').length;
+
+            document.getElementById('calculatorContent').innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-purple-100 rounded-xl p-5 shadow-lg border-2 border-purple-300">
+                        <p class="text-sm text-gray-600">Общо Потребители</p>
+                        <p class="text-3xl font-bold text-purple-600">${totalUsers}</p>
+                    </div>
+                    <div class="bg-blue-100 rounded-xl p-5 shadow-lg border-2 border-blue-300">
+                        <p class="text-sm text-gray-600">Общо Залози</p>
+                        <p class="text-3xl font-bold text-blue-600">${totalStakes}</p>
+                    </div>
+                    <div class="bg-green-100 rounded-xl p-5 shadow-lg border-2 border-green-300">
+                        <p class="text-sm text-gray-600">Обща Сума</p>
+                        <p class="text-2xl font-bold text-green-600">${totalAmount.toFixed(2)} лв</p>
+                    </div>
+                    <div class="bg-orange-100 rounded-xl p-5 shadow-lg border-2 border-orange-300">
+                        <p class="text-sm text-gray-600">W / L / P</p>
+                        <p class="text-2xl font-bold text-orange-600">${wonStakes} / ${lostStakes} / ${pendingStakes}</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <h2 class="text-xl font-bold mb-4">👥 Потребители</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-purple-100">
+                                    <th class="p-3 text-left">Потребител</th>
+                                    <th class="p-3 text-left">Email</th>
+                                    <th class="p-3 text-left">Начална Банка</th>
+                                    <th class="p-3 text-left">Залози</th>
+                                    <th class="p-3 text-left">Действие</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${users.map(u => {
+                                    const userStakes = stakes.filter(s => s.userId === u.id);
+                                    return `
+                                        <tr class="border-b hover:bg-purple-50">
+                                            <td class="p-3 font-semibold">${u.username || 'N/A'}</td>
+                                            <td class="p-3">${u.email || 'N/A'}</td>
+                                            <td class="p-3 font-bold text-blue-600">${u.initialBank || 1000} лв</td>
+                                            <td class="p-3 font-bold text-green-600">${userStakes.length}</td>
+                                            <td class="p-3">
+                                                <button onclick="exportUserStakes('${u.id}')" 
+                                                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                                    📥 Excel
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h2 class="text-xl font-bold mb-4">📊 Всички Залози</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="p-2 text-left">User ID</th>
+                                    <th class="p-2 text-left">#</th>
+                                    <th class="p-2 text-left">Мач</th>
+                                    <th class="p-2 text-left">Коеф.</th>
+                                    <th class="p-2 text-left">Залог</th>
+                                    <th class="p-2 text-left">Резултат</th>
+                                    <th class="p-2 text-left">Време</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${stakes.slice(0, 50).map(s => `
+                                    <tr class="border-b ${s.result === 'win' ? 'bg-green-50' : s.result === 'lose' ? 'bg-red-50' : s.result === 'push' ? 'bg-yellow-50' : 'bg-orange-50'}">
+                                        <td class="p-2 text-xs text-gray-500">${(s.userId || '').substring(0, 8)}...</td>
+                                        <td class="p-2 font-bold">${s.number || 0}</td>
+                                        <td class="p-2"><span class="font-semibold">${s.homeTeam || 'N/A'}</span> - <span class="font-semibold">${s.awayTeam || 'N/A'}</span></td>
+                                        <td class="p-2">${(s.odds || 0).toFixed(2)}</td>
+                                        <td class="p-2 font-semibold">${(s.stakeAmount || 0).toFixed(2)} лв</td>
+                                        <td class="p-2">
+                                            <span class="font-bold px-2 py-1 rounded text-xs ${
+                                                s.result === 'win' ? 'bg-green-200 text-green-800' : 
+                                                s.result === 'lose' ? 'bg-red-200 text-red-800' : 
+                                                s.result === 'push' ? 'bg-yellow-200 text-yellow-800' : 
+                                                'bg-orange-200 text-orange-800'
+                                            }">
+                                                ${(s.result || 'PENDING').toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td class="p-2 text-xs">${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
