@@ -37,7 +37,6 @@
             <h1 class="text-3xl font-bold text-center mb-2 text-blue-600">⚽ Kelly Calculator Pro</h1>
             <p class="text-center text-gray-500 text-sm mb-6">Професионален залагателен калкулатор</p>
             
-            <!-- Install Button -->
             <div class="mb-6">
                 <button onclick="installPWA()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 shadow-lg transform transition hover:scale-105">
                     📱 Инсталирай като приложение
@@ -104,7 +103,6 @@
     </div>
 
     <script>
-        // PWA Install
         let deferredPrompt;
         
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -116,7 +114,6 @@
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                console.log('Install outcome:', outcome);
             } else {
                 if (navigator.userAgent.match(/iPhone|iPad|iPod/)) {
                     alert('За да инсталирате на iOS:\n\n1. Натиснете бутона "Share" ⬆️\n2. Scroll надолу и изберете "Add to Home Screen"\n3. Натиснете "Add"\n\nПриложението ще се появи на началния екран!');
@@ -151,16 +148,13 @@
             currentBank: 1000,
             stakes: [],
             kellyType: 'half',
+            market: 'home',
             homeTeam: '',
             awayTeam: '',
             odds: '',
             winProb: ''
         };
-        
-        // ВАЖНО: Флаг за предотвратяване на рендериране
-        let isRendering = false;
 
-        // Auth Functions
         function toggleAuth() {
             document.getElementById('loginForm').classList.toggle('hidden');
             document.getElementById('registerForm').classList.toggle('hidden');
@@ -263,7 +257,6 @@
             }
         });
 
-        // Calculator Functions
         function calculateStakeAmount(odds, winProb, kellyType, bank) {
             const p = parseFloat(String(winProb).replace(',', '.')) / 100;
             const o = parseFloat(String(odds).replace(',', '.'));
@@ -275,53 +268,6 @@
             
             let multiplier = kellyType === 'half' ? 0.5 : kellyType === 'quarter' ? 0.25 : 1;
             return Math.max(0, bank * kellyFraction * multiplier);
-        }
-
-        function updateStakeSuggestion() {
-            if (isRendering) return; // Не обновявай докато се рендерира
-            
-            const suggestedAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
-            const edgeInfo = calculateEdge(state.odds, state.winProb);
-            
-            const suggestionEl = document.getElementById('suggestedStake');
-            const edgeEl = document.getElementById('edgeInfo');
-            const addButton = document.getElementById('addStakeButton');
-            
-            if (suggestionEl) {
-                suggestionEl.textContent = suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---';
-            }
-            
-            if (addButton) {
-                const shouldDisable = !state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue);
-                if (shouldDisable) {
-                    addButton.setAttribute('disabled', 'disabled');
-                    addButton.className = 'w-full bg-gray-400 text-white p-3 rounded-lg font-semibold';
-                } else {
-                    addButton.removeAttribute('disabled');
-                    addButton.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold transition';
-                }
-            }
-            
-            if (edgeEl) {
-                if (edgeInfo && edgeInfo.hasValue && suggestedAmount > 0) {
-                    edgeEl.innerHTML = `
-                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
-                            <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
-                            <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
-                            <p class="text-sm text-gray-700 mt-2">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
-                        </div>
-                    `;
-                } else if (edgeInfo && !edgeInfo.hasValue) {
-                    edgeEl.innerHTML = `
-                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
-                            <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
-                            <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
-                        </div>
-                    `;
-                } else {
-                    edgeEl.innerHTML = '';
-                }
-            }
         }
 
         function calculateEdge(odds, winProb) {
@@ -357,6 +303,52 @@
             await loadUserCalculator();
         }
 
+        // КРИТИЧНО: Тази функция САМО обновява UI елементите БЕЗ да пререндерва
+        function updateDisplay() {
+            const suggestedAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
+            const edgeInfo = calculateEdge(state.odds, state.winProb);
+            
+            const suggestionEl = document.getElementById('suggestedStake');
+            const edgeEl = document.getElementById('edgeInfo');
+            const addButton = document.getElementById('addStakeButton');
+            
+            if (suggestionEl) {
+                suggestionEl.textContent = suggestedAmount > 0 ? suggestedAmount.toFixed(2) + ' лв' : '---';
+            }
+            
+            if (addButton) {
+                const shouldDisable = !state.odds || !state.winProb || suggestedAmount <= 0 || (edgeInfo && !edgeInfo.hasValue);
+                if (shouldDisable) {
+                    addButton.disabled = true;
+                    addButton.className = 'w-full bg-gray-400 text-white p-3 rounded-lg font-semibold';
+                } else {
+                    addButton.disabled = false;
+                    addButton.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold transition';
+                }
+            }
+            
+            if (edgeEl) {
+                if (edgeInfo && edgeInfo.hasValue && suggestedAmount > 0) {
+                    edgeEl.innerHTML = `
+                        <div class="mt-4 p-4 bg-green-50 border-2 border-green-400 rounded-lg">
+                            <p class="text-green-800 font-bold text-lg">✅ Има VALUE!</p>
+                            <p class="text-green-700">Edge: <span class="font-bold text-xl">+${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                            <p class="text-sm text-gray-700 mt-2">Потенциална печалба: <span class="font-semibold text-green-600">+${(suggestedAmount * parseFloat(state.odds || 0) - suggestedAmount).toFixed(2)} лв</span></p>
+                        </div>
+                    `;
+                } else if (edgeInfo && !edgeInfo.hasValue) {
+                    edgeEl.innerHTML = `
+                        <div class="mt-4 p-4 bg-red-100 border-2 border-red-400 rounded-lg">
+                            <p class="text-red-800 font-bold text-lg mb-2">⚠️ НЯМА VALUE!</p>
+                            <p class="text-red-700">Edge: <span class="font-bold">${edgeInfo.edgePercent.toFixed(2)}%</span></p>
+                        </div>
+                    `;
+                } else {
+                    edgeEl.innerHTML = '';
+                }
+            }
+        }
+
         async function addStake() {
             const stakeAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
             
@@ -375,6 +367,7 @@
                 number: state.stakes.length + 1,
                 homeTeam: state.homeTeam,
                 awayTeam: state.awayTeam,
+                market: state.market,
                 kellyType: state.kellyType,
                 odds: parseFloat(String(state.odds).replace(',', '.')),
                 winProb: parseFloat(String(state.winProb).replace(',', '.')),
@@ -410,10 +403,10 @@
         }
 
         function exportToExcel(stakes, username = 'User') {
-            let csv = 'Залог №\tДомакин\tГост\tKelly\tКоеф.\tВер.%\tЗалог лв\tПечалба лв\tРезултат\tВреме\n';
+            let csv = 'Залог №\tДомакин\tГост\tПазар\tKelly\tКоеф.\tВер.%\tЗалог лв\tПечалба лв\tРезултат\tВреме\n';
             
             stakes.forEach(s => {
-                csv += `${s.number || 0}\t${s.homeTeam || 'N/A'}\t${s.awayTeam || 'N/A'}\t${s.kellyType || 'half'}\t${(s.odds || 0).toFixed(2)}\t${(s.winProb || 0).toFixed(1)}\t${(s.stakeAmount || 0).toFixed(2)}\t${(s.potentialProfit || 0).toFixed(2)}\t${s.result || 'pending'}\t${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}\n`;
+                csv += `${s.number || 0}\t${s.homeTeam || 'N/A'}\t${s.awayTeam || 'N/A'}\t${s.market || 'N/A'}\t${s.kellyType || 'half'}\t${(s.odds || 0).toFixed(2)}\t${(s.winProb || 0).toFixed(1)}\t${(s.stakeAmount || 0).toFixed(2)}\t${(s.potentialProfit || 0).toFixed(2)}\t${s.result || 'pending'}\t${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}\n`;
             });
             
             const completedStakes = stakes.filter(s => s.result !== 'pending');
@@ -542,6 +535,7 @@
                         odds: data.odds || 0,
                         homeTeam: data.homeTeam || 'N/A',
                         awayTeam: data.awayTeam || 'N/A',
+                        market: data.market || 'N/A',
                         result: data.result || 'pending'
                     });
                 });
@@ -551,24 +545,26 @@
                 renderAdminPanel(users, allStakes);
             } catch (error) {
                 console.error('Admin panel error:', error);
-                document.getElementById('calculatorContent').innerHTML = `
-                    <div class="bg-red-100 border-2 border-red-400 rounded-lg p-6">
-                        <h2 class="text-xl font-bold text-red-800 mb-2">Грешка при зареждане</h2>
-                        <p class="text-red-700">${error.message}</p>
-                        <button onclick="loadAdminPanel()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg">
-                            Опитай отново
-                        </button>
-                    </div>
-                `;
             }
         }
 
+        function getMarketLabel(market) {
+            const labels = {
+                'home': '🏠 Home',
+                'away': '✈️ Away',
+                'over1.5': '⚽ Over 1.5',
+                'under1.5': '⚽ Under 1.5',
+                'over2.5': '⚽ Over 2.5',
+                'under2.5': '⚽ Under 2.5',
+                'over4.5': '⚽ Over 4.5',
+                'under4.5': '⚽ Under 4.5',
+                'corners': '🚩 Corners'
+            };
+            return labels[market] || market;
+        }
+
         function renderCalculator() {
-            isRendering = true; // Маркираме че рендерираме
-            
-            if (!state.stakes) {
-                state.stakes = [];
-            }
+            if (!state.stakes) state.stakes = [];
             
             const suggestedAmount = state.odds && state.winProb ? calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank) : 0;
             const edgeInfo = state.odds && state.winProb ? calculateEdge(state.odds, state.winProb) : null;
@@ -649,7 +645,22 @@
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Пазар</label>
+                            <select id="marketSelect" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                                <option value="home" ${state.market === 'home' ? 'selected' : ''}>🏠 Home</option>
+                                <option value="away" ${state.market === 'away' ? 'selected' : ''}>✈️ Away</option>
+                                <option value="over1.5" ${state.market === 'over1.5' ? 'selected' : ''}>⚽ Over 1.5</option>
+                                <option value="under1.5" ${state.market === 'under1.5' ? 'selected' : ''}>⚽ Under 1.5</option>
+                                <option value="over2.5" ${state.market === 'over2.5' ? 'selected' : ''}>⚽ Over 2.5</option>
+                                <option value="under2.5" ${state.market === 'under2.5' ? 'selected' : ''}>⚽ Under 2.5</option>
+                                <option value="over4.5" ${state.market === 'over4.5' ? 'selected' : ''}>⚽ Over 4.5</option>
+                                <option value="under4.5" ${state.market === 'under4.5' ? 'selected' : ''}>⚽ Under 4.5</option>
+                                <option value="corners" ${state.market === 'corners' ? 'selected' : ''}>🚩 Corners</option>
+                            </select>
+                        </div>
+                        
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Kelly Тип</label>
                             <select id="kellyTypeSelect" class="w-full p-3 border-2 border-gray-300 rounded-lg">
@@ -661,13 +672,13 @@
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Коефициент</label>
-                            <input type="text" id="oddsInput" value="${state.odds}" placeholder="1.5" inputmode="decimal"
+                            <input type="number" step="0.01" id="oddsInput" value="${state.odds}" placeholder="1.5"
                                 class="w-full p-3 border-2 border-gray-300 rounded-lg">
                         </div>
                         
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Вероятност %</label>
-                            <input type="text" id="winProbInput" value="${state.winProb}" placeholder="80" inputmode="decimal"
+                            <input type="number" step="0.1" id="winProbInput" value="${state.winProb}" placeholder="80"
                                 class="w-full p-3 border-2 border-gray-300 rounded-lg">
                         </div>
                         
@@ -714,6 +725,7 @@
                                     <tr class="bg-orange-100">
                                         <th class="p-3 text-left">#</th>
                                         <th class="p-3 text-left">Мач</th>
+                                        <th class="p-3 text-left">Пазар</th>
                                         <th class="p-3 text-left">Коеф.</th>
                                         <th class="p-3 text-left">Залог</th>
                                         <th class="p-3 text-left">Печалба</th>
@@ -725,6 +737,7 @@
                                         <tr class="border-b hover:bg-orange-50">
                                             <td class="p-3 font-bold">${s.number || 0}</td>
                                             <td class="p-3"><span class="font-semibold">${s.homeTeam || 'N/A'}</span> vs <span class="font-semibold">${s.awayTeam || 'N/A'}</span></td>
+                                            <td class="p-3">${getMarketLabel(s.market || 'home')}</td>
                                             <td class="p-3 font-semibold">${(s.odds || 0).toFixed(2)}</td>
                                             <td class="p-3 font-bold text-red-600">${(s.stakeAmount || 0).toFixed(2)} лв</td>
                                             <td class="p-3 font-bold text-green-600">+${((s.potentialProfit || 0)).toFixed(2)} лв</td>
@@ -761,6 +774,7 @@
                                     <tr class="bg-gray-100">
                                         <th class="p-2 text-left">#</th>
                                         <th class="p-2 text-left">Мач</th>
+                                        <th class="p-2 text-left">Пазар</th>
                                         <th class="p-2 text-left">Коеф.</th>
                                         <th class="p-2 text-left">Залог</th>
                                         <th class="p-2 text-left">Резултат</th>
@@ -772,6 +786,7 @@
                                         <tr class="border-b ${s.result === 'win' ? 'bg-green-50' : s.result === 'lose' ? 'bg-red-50' : 'bg-yellow-50'}">
                                             <td class="p-2 font-bold">${s.number || 0}</td>
                                             <td class="p-2"><span class="font-semibold">${s.homeTeam || 'N/A'}</span> - <span class="font-semibold">${s.awayTeam || 'N/A'}</span></td>
+                                            <td class="p-2 text-xs">${getMarketLabel(s.market || 'home')}</td>
                                             <td class="p-2">${(s.odds || 0).toFixed(2)}</td>
                                             <td class="p-2">${(s.stakeAmount || 0).toFixed(2)}</td>
                                             <td class="p-2">
@@ -791,49 +806,52 @@
                 ` : ''}
             `;
             
-            // ВАЖНО: След рендериране, добавяме event listeners ВЕДНЪЖ
-            setTimeout(() => {
-                const homeTeamInput = document.getElementById('homeTeamInput');
-                const awayTeamInput = document.getElementById('awayTeamInput');
-                const kellyTypeSelect = document.getElementById('kellyTypeSelect');
-                const oddsInput = document.getElementById('oddsInput');
-                const winProbInput = document.getElementById('winProbInput');
-                
-                if (homeTeamInput) {
-                    homeTeamInput.addEventListener('input', (e) => {
-                        state.homeTeam = e.target.value;
-                    });
-                }
-                
-                if (awayTeamInput) {
-                    awayTeamInput.addEventListener('input', (e) => {
-                        state.awayTeam = e.target.value;
-                    });
-                }
-                
-                if (kellyTypeSelect) {
-                    kellyTypeSelect.addEventListener('change', (e) => {
-                        state.kellyType = e.target.value;
-                        updateStakeSuggestion();
-                    });
-                }
-                
-                if (oddsInput) {
-                    oddsInput.addEventListener('input', (e) => {
-                        state.odds = e.target.value;
-                        updateStakeSuggestion();
-                    });
-                }
-                
-                if (winProbInput) {
-                    winProbInput.addEventListener('input', (e) => {
-                        state.winProb = e.target.value;
-                        updateStakeSuggestion();
-                    });
-                }
-                
-                isRendering = false; // Приключихме с рендирането
-            }, 0);
+            // КРИТИЧНО: Добавяме event listeners след рендиране
+            const homeInput = document.getElementById('homeTeamInput');
+            const awayInput = document.getElementById('awayTeamInput');
+            const marketSelect = document.getElementById('marketSelect');
+            const kellySelect = document.getElementById('kellyTypeSelect');
+            const oddsInput = document.getElementById('oddsInput');
+            const probInput = document.getElementById('winProbInput');
+            
+            if (homeInput) {
+                homeInput.addEventListener('input', (e) => {
+                    state.homeTeam = e.target.value;
+                });
+            }
+            
+            if (awayInput) {
+                awayInput.addEventListener('input', (e) => {
+                    state.awayTeam = e.target.value;
+                });
+            }
+            
+            if (marketSelect) {
+                marketSelect.addEventListener('change', (e) => {
+                    state.market = e.target.value;
+                });
+            }
+            
+            if (kellySelect) {
+                kellySelect.addEventListener('change', (e) => {
+                    state.kellyType = e.target.value;
+                    updateDisplay();
+                });
+            }
+            
+            if (oddsInput) {
+                oddsInput.addEventListener('input', (e) => {
+                    state.odds = e.target.value;
+                    updateDisplay();
+                });
+            }
+            
+            if (probInput) {
+                probInput.addEventListener('input', (e) => {
+                    state.winProb = e.target.value;
+                    updateDisplay();
+                });
+            }
         }
 
         function renderAdminPanel(users, stakes) {
@@ -909,6 +927,7 @@
                                     <th class="p-2 text-left">User ID</th>
                                     <th class="p-2 text-left">#</th>
                                     <th class="p-2 text-left">Мач</th>
+                                    <th class="p-2 text-left">Пазар</th>
                                     <th class="p-2 text-left">Коеф.</th>
                                     <th class="p-2 text-left">Залог</th>
                                     <th class="p-2 text-left">Резултат</th>
@@ -921,6 +940,7 @@
                                         <td class="p-2 text-xs text-gray-500">${(s.userId || '').substring(0, 8)}...</td>
                                         <td class="p-2 font-bold">${s.number || 0}</td>
                                         <td class="p-2"><span class="font-semibold">${s.homeTeam || 'N/A'}</span> - <span class="font-semibold">${s.awayTeam || 'N/A'}</span></td>
+                                        <td class="p-2 text-xs">${getMarketLabel(s.market || 'home')}</td>
                                         <td class="p-2">${(s.odds || 0).toFixed(2)}</td>
                                         <td class="p-2 font-semibold">${(s.stakeAmount || 0).toFixed(2)} лв</td>
                                         <td class="p-2">
