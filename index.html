@@ -106,14 +106,6 @@
         // TELEGRAM WEBHOOK URL
         const TELEGRAM_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzog4_cBwbI9Wd8kw_zkb7Tj8XHCRLtr3oZ47PlfUJkZ0raEhD4mdUozPnOT4Lx7yreeA/exec';
         
-        // Проверка дали Firebase е зареден
-        if (typeof firebase === 'undefined') {
-            console.error('❌ Firebase не е зареден!');
-            alert('Грешка при зареждане на приложението. Моля презаредете страницата.');
-        } else {
-            console.log('✅ Firebase е зареден успешно!');
-        }
-        
         // PWA Install
         let deferredPrompt;
         
@@ -147,13 +139,47 @@
             measurementId: "G-196ZJ43NT2"
         };
 
-        // Инициализираме Firebase
-        try {
-            firebase.initializeApp(firebaseConfig);
-            console.log('✅ Firebase инициализиран успешно!');
-        } catch (error) {
-            console.error('❌ Грешка при Firebase инициализация:', error);
-        }
+        let auth, db;
+        
+        // Чакаме Firebase да се зареди
+        window.addEventListener('load', function() {
+            if (typeof firebase === 'undefined') {
+                console.error('❌ Firebase не е зареден!');
+                alert('Грешка при зареждане на приложението. Моля презаредете страницата.');
+                return;
+            }
+            
+            // Инициализираме Firebase
+            try {
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+                console.log('✅ Firebase инициализиран успешно!');
+                
+                // Стартираме auth listener
+                auth.onAuthStateChanged(async (user) => {
+                    if (user && !isAdmin) {
+                        currentUser = user;
+                        const userDoc = await db.collection('users').doc(user.uid).get();
+                        const userData = userDoc.data();
+                        
+                        state.initialBank = userData.initialBank || 1000;
+                        
+                        document.getElementById('authScreen').classList.add('hidden');
+                        document.getElementById('mainApp').classList.remove('hidden');
+                        document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
+                        
+                        await loadUserCalculator();
+                    } else if (!isAdmin) {
+                        document.getElementById('authScreen').classList.remove('hidden');
+                        document.getElementById('mainApp').classList.add('hidden');
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Грешка при Firebase инициализация:', error);
+                alert('Грешка при инициализация на Firebase: ' + error.message);
+            }
+        });
         
         const ADMIN_PASSWORD = "Bold_9000";
         
@@ -252,35 +278,10 @@
                 isAdmin = false;
                 location.reload();
             } else {
-                auth.signOut();
-            }
-        }
-
-        // Инициализация след Firebase
-        try {
-            auth = firebase.auth();
-            db = firebase.firestore();
-            
-            auth.onAuthStateChanged(async (user) => {
-                if (user && !isAdmin) {
-                    currentUser = user;
-                    const userDoc = await db.collection('users').doc(user.uid).get();
-                    const userData = userDoc.data();
-                    
-                    state.initialBank = userData.initialBank || 1000;
-                    
-                    document.getElementById('authScreen').classList.add('hidden');
-                    document.getElementById('mainApp').classList.remove('hidden');
-                    document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
-                    
-                    await loadUserCalculator();
-                } else if (!isAdmin) {
-                    document.getElementById('authScreen').classList.remove('hidden');
-                    document.getElementById('mainApp').classList.add('hidden');
+                if (auth) {
+                    auth.signOut();
                 }
-            });
-        } catch (error) {
-            console.error('Auth initialization error:', error);
+            }
         }
 
         function calculateStakeAmount(odds, winProb, kellyType, bank) {
