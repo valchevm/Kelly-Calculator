@@ -454,15 +454,40 @@
             }));
             
             try {
-                const response = await fetch(TELEGRAM_WEBHOOK_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(telegramData)
+                // Използваме JSONP заобикаляне на CORS
+                const jsonString = JSON.stringify(telegramData);
+                const encodedData = encodeURIComponent(jsonString);
+                const callbackName = 'telegramCallback' + Date.now();
+                
+                // Създаваме promise за JSONP отговора
+                const jsonpPromise = new Promise((resolve, reject) => {
+                    window[callbackName] = function(response) {
+                        delete window[callbackName];
+                        document.body.removeChild(script);
+                        resolve(response);
+                    };
+                    
+                    const script = document.createElement('script');
+                    script.src = `${TELEGRAM_WEBHOOK_URL}?data=${encodedData}&callback=${callbackName}`;
+                    script.onerror = () => {
+                        delete window[callbackName];
+                        document.body.removeChild(script);
+                        reject(new Error('Failed to load script'));
+                    };
+                    document.body.appendChild(script);
+                    
+                    // Timeout след 30 секунди
+                    setTimeout(() => {
+                        if (window[callbackName]) {
+                            delete window[callbackName];
+                            document.body.removeChild(script);
+                            reject(new Error('Request timeout'));
+                        }
+                    }, 30000);
                 });
                 
-                const result = await response.json();
+                const result = await jsonpPromise;
+                console.log('Резултат от Telegram:', result);
                 
                 if (result.success) {
                     // Маркираме залозите като изпратени
@@ -472,14 +497,14 @@
                         });
                     }
                     
-                    alert(`✅ ${unsentStakes.length} залога изпратени към Telegram!`);
+                    alert(`✅ ${result.count} залога изпратени към Telegram!`);
                     await loadUserCalculator();
                 } else {
-                    alert('❌ Грешка при изпращане към Telegram!');
+                    throw new Error(result.error || 'Непозната грешка от сървъра');
                 }
             } catch (error) {
                 console.error('Telegram error:', error);
-                alert('❌ Грешка при изпращане към Telegram: ' + error.message);
+                alert(`❌ Грешка при изпращане към Telegram:\n\n${error.message}\n\nПровери Console (F12) за повече детайли.`);
             }
         }
 
@@ -1201,7 +1226,3 @@
     </script>
 </body>
 </html>
-
-
-
-
