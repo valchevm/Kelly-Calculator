@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase SDK v9 Compat - Зареждат се ПРЕДИ основния скрипт -->
+    <!-- Firebase SDK v9 Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -103,6 +103,9 @@
     </div>
 
     <script>
+        // TELEGRAM WEBHOOK URL
+        const TELEGRAM_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzog4_cBwbI9Wd8kw_zkb7Tj8XHCRLtr3oZ47PlfUJkZ0raEhD4mdUozPnOT4Lx7yreeA/exec';
+        
         // Проверка дали Firebase е зареден
         if (typeof firebase === 'undefined') {
             console.error('❌ Firebase не е зареден!');
@@ -144,16 +147,20 @@
             measurementId: "G-196ZJ43NT2"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        // Инициализираме Firebase
+        try {
+            firebase.initializeApp(firebaseConfig);
+            console.log('✅ Firebase инициализиран успешно!');
+        } catch (error) {
+            console.error('❌ Грешка при Firebase инициализация:', error);
+        }
         
         const ADMIN_PASSWORD = "Bold_9000";
         
         let currentUser = null;
         let isAdmin = false;
+        let auth, db;
+        
         let state = {
             initialBank: 1000,
             currentBank: 1000,
@@ -249,24 +256,32 @@
             }
         }
 
-        auth.onAuthStateChanged(async (user) => {
-            if (user && !isAdmin) {
-                currentUser = user;
-                const userDoc = await db.collection('users').doc(user.uid).get();
-                const userData = userDoc.data();
-                
-                state.initialBank = userData.initialBank || 1000;
-                
-                document.getElementById('authScreen').classList.add('hidden');
-                document.getElementById('mainApp').classList.remove('hidden');
-                document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
-                
-                await loadUserCalculator();
-            } else if (!isAdmin) {
-                document.getElementById('authScreen').classList.remove('hidden');
-                document.getElementById('mainApp').classList.add('hidden');
-            }
-        });
+        // Инициализация след Firebase
+        try {
+            auth = firebase.auth();
+            db = firebase.firestore();
+            
+            auth.onAuthStateChanged(async (user) => {
+                if (user && !isAdmin) {
+                    currentUser = user;
+                    const userDoc = await db.collection('users').doc(user.uid).get();
+                    const userData = userDoc.data();
+                    
+                    state.initialBank = userData.initialBank || 1000;
+                    
+                    document.getElementById('authScreen').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
+                    
+                    await loadUserCalculator();
+                } else if (!isAdmin) {
+                    document.getElementById('authScreen').classList.remove('hidden');
+                    document.getElementById('mainApp').classList.add('hidden');
+                }
+            });
+        } catch (error) {
+            console.error('Auth initialization error:', error);
+        }
 
         function calculateStakeAmount(odds, winProb, kellyType, bank) {
             const p = parseFloat(String(winProb).replace(',', '.')) / 100;
@@ -281,40 +296,6 @@
             return Math.max(0, bank * kellyFraction * multiplier);
         }
 
-        function calculateEdge(odds, winProb) {
-            const p = parseFloat(String(winProb).replace(',', '.')) / 100;
-            const o = parseFloat(String(odds).replace(',', '.'));
-            
-            if (!p || !o || p <= 0 || p >= 1 || o <= 1) return null;
-            
-            const ev = (p * o) - 1;
-            return {
-                hasValue: ev > 0,
-                edgePercent: ev * 100,
-                expectedValue: ev
-            };
-        }
-
-        function calculateYield(profit, totalStaked) {
-            if (totalStaked === 0) return 0;
-            return (profit / totalStaked) * 100;
-        }
-
-        function calculateROI(currentBank, initialBank) {
-            if (initialBank === 0) return 0;
-            return ((currentBank - initialBank) / initialBank) * 100;
-        }
-
-        async function updateInitialBank(newBank) {
-            state.initialBank = newBank;
-            state.currentBank = newBank;
-            await db.collection('users').doc(currentUser.uid).update({
-                initialBank: newBank
-            });
-            await loadUserCalculator();
-        }
-
-        // КРИТИЧНО: Тази функция САМО обновява UI елементите БЕЗ да пререндерва
         function updateDisplay() {
             const suggestedAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
             const edgeInfo = calculateEdge(state.odds, state.winProb);
@@ -360,6 +341,39 @@
             }
         }
 
+        function calculateEdge(odds, winProb) {
+            const p = parseFloat(String(winProb).replace(',', '.')) / 100;
+            const o = parseFloat(String(odds).replace(',', '.'));
+            
+            if (!p || !o || p <= 0 || p >= 1 || o <= 1) return null;
+            
+            const ev = (p * o) - 1;
+            return {
+                hasValue: ev > 0,
+                edgePercent: ev * 100,
+                expectedValue: ev
+            };
+        }
+
+        function calculateYield(profit, totalStaked) {
+            if (totalStaked === 0) return 0;
+            return (profit / totalStaked) * 100;
+        }
+
+        function calculateROI(currentBank, initialBank) {
+            if (initialBank === 0) return 0;
+            return ((currentBank - initialBank) / initialBank) * 100;
+        }
+
+        async function updateInitialBank(newBank) {
+            state.initialBank = newBank;
+            state.currentBank = newBank;
+            await db.collection('users').doc(currentUser.uid).update({
+                initialBank: newBank
+            });
+            await loadUserCalculator();
+        }
+
         async function addStake() {
             const stakeAmount = calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank);
             
@@ -386,6 +400,7 @@
                 potentialWin: stakeAmount * parseFloat(String(state.odds).replace(',', '.')),
                 potentialProfit: (stakeAmount * parseFloat(String(state.odds).replace(',', '.'))) - stakeAmount,
                 result: 'pending',
+                sentToTelegram: false,
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             };
 
@@ -396,6 +411,61 @@
             state.odds = '';
             state.winProb = '';
             await loadUserCalculator();
+        }
+
+        async function sendUnsentStakesToTelegram() {
+            const unsentStakes = state.stakes.filter(s => s.result === 'pending' && !s.sentToTelegram);
+            
+            if (unsentStakes.length === 0) {
+                alert('Няма неизпратени залози!');
+                return;
+            }
+            
+            const kellyLabels = {
+                'half': 'Half Kelly',
+                'quarter': 'Quarter Kelly',
+                'full': 'Full Kelly'
+            };
+            
+            const telegramData = unsentStakes.map(stake => ({
+                homeTeam: stake.homeTeam,
+                awayTeam: stake.awayTeam,
+                marketLabel: getMarketLabel(stake.market),
+                odds: stake.odds.toFixed(2),
+                kellyTypeLabel: kellyLabels[stake.kellyType],
+                stakeAmount: stake.stakeAmount.toFixed(2),
+                currentBank: state.currentBank.toFixed(2),
+                potentialProfit: stake.potentialProfit.toFixed(2)
+            }));
+            
+            try {
+                const response = await fetch(TELEGRAM_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(telegramData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Маркираме залозите като изпратени
+                    for (const stake of unsentStakes) {
+                        await db.collection('stakes').doc(stake.id).update({
+                            sentToTelegram: true
+                        });
+                    }
+                    
+                    alert(`✅ ${unsentStakes.length} залога изпратени към Telegram!`);
+                    await loadUserCalculator();
+                } else {
+                    alert('❌ Грешка при изпращане към Telegram!');
+                }
+            } catch (error) {
+                console.error('Telegram error:', error);
+                alert('❌ Грешка при изпращане към Telegram: ' + error.message);
+            }
         }
 
         async function markResult(stakeId, result) {
@@ -417,7 +487,6 @@
             const stakeDoc = await db.collection('stakes').doc(stakeId).get();
             const stake = stakeDoc.data();
             
-            // Показваме modal с данните за редакция
             const modal = document.createElement('div');
             modal.id = 'editModal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
@@ -506,23 +575,19 @@
                 return;
             }
             
-            // Изчисляваме новата сума за залог
             const stakeDoc = await db.collection('stakes').doc(stakeId).get();
             const oldStake = stakeDoc.data();
             
-            // Връщаме старата сума в банката
             state.currentBank += oldStake.stakeAmount || 0;
             
-            // Изчисляваме новата сума
             const newStakeAmount = calculateStakeAmount(odds, winProb, kellyType, state.currentBank);
             
             if (newStakeAmount > state.currentBank) {
                 alert('Недостатъчно средства за новата сума!');
-                state.currentBank -= oldStake.stakeAmount || 0; // Връщаме обратно
+                state.currentBank -= oldStake.stakeAmount || 0;
                 return;
             }
             
-            // Обновяваме залога
             await db.collection('stakes').doc(stakeId).update({
                 homeTeam: homeTeam,
                 awayTeam: awayTeam,
@@ -532,10 +597,10 @@
                 winProb: winProb,
                 stakeAmount: newStakeAmount,
                 potentialWin: newStakeAmount * odds,
-                potentialProfit: (newStakeAmount * odds) - newStakeAmount
+                potentialProfit: (newStakeAmount * odds) - newStakeAmount,
+                sentToTelegram: false
             });
             
-            // Приспадаме новата сума
             state.currentBank -= newStakeAmount;
             
             closeEditModal();
@@ -545,10 +610,10 @@
         }
 
         function exportToExcel(stakes, username = 'User') {
-            let csv = 'Залог №\tДомакин\tГост\tПазар\tKelly\tКоеф.\tВер.%\tЗалог лв\tПечалба лв\tРезултат\tВреме\n';
+            let csv = 'Залог №\tДомакин\tГост\tПазар\tKelly\tКоеф.\tВер.%\tЗалог лв\tПечалба лв\tРезултат\tИзпратен\tВреме\n';
             
             stakes.forEach(s => {
-                csv += `${s.number || 0}\t${s.homeTeam || 'N/A'}\t${s.awayTeam || 'N/A'}\t${s.market || 'N/A'}\t${s.kellyType || 'half'}\t${(s.odds || 0).toFixed(2)}\t${(s.winProb || 0).toFixed(1)}\t${(s.stakeAmount || 0).toFixed(2)}\t${(s.potentialProfit || 0).toFixed(2)}\t${s.result || 'pending'}\t${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}\n`;
+                csv += `${s.number || 0}\t${s.homeTeam || 'N/A'}\t${s.awayTeam || 'N/A'}\t${s.market || 'N/A'}\t${s.kellyType || 'half'}\t${(s.odds || 0).toFixed(2)}\t${(s.winProb || 0).toFixed(1)}\t${(s.stakeAmount || 0).toFixed(2)}\t${(s.potentialProfit || 0).toFixed(2)}\t${s.result || 'pending'}\t${s.sentToTelegram ? 'Да' : 'Не'}\t${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}\n`;
             });
             
             const completedStakes = stakes.filter(s => s.result !== 'pending');
@@ -711,6 +776,7 @@
             const suggestedAmount = state.odds && state.winProb ? calculateStakeAmount(state.odds, state.winProb, state.kellyType, state.currentBank) : 0;
             const edgeInfo = state.odds && state.winProb ? calculateEdge(state.odds, state.winProb) : null;
             const pendingStakes = state.stakes.filter(s => s && s.result === 'pending');
+            const unsentStakes = pendingStakes.filter(s => !s.sentToTelegram);
             const completedStakes = state.stakes.filter(s => s && s.result !== 'pending');
             
             const wonStakes = completedStakes.filter(s => s.result === 'win');
@@ -860,7 +926,15 @@
 
                 ${pendingStakes.length > 0 ? `
                     <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                        <h2 class="text-xl font-bold mb-4">⏳ Активни Залози (${pendingStakes.length})</h2>
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">⏳ Активни Залози (${pendingStakes.length})</h2>
+                            ${unsentStakes.length > 0 ? `
+                                <button onclick="sendUnsentStakesToTelegram()" 
+                                    class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transform transition hover:scale-105">
+                                    📤 Изпрати неизпратените към Telegram (${unsentStakes.length})
+                                </button>
+                            ` : '<p class="text-green-600 font-semibold">✅ Всички залози са изпратени</p>'}
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="w-full">
                                 <thead>
@@ -871,6 +945,7 @@
                                         <th class="p-3 text-left">Коеф.</th>
                                         <th class="p-3 text-left">Залог</th>
                                         <th class="p-3 text-left">Печалба</th>
+                                        <th class="p-3 text-left">Telegram</th>
                                         <th class="p-3 text-left">Действие</th>
                                     </tr>
                                 </thead>
@@ -883,6 +958,7 @@
                                             <td class="p-3 font-semibold">${(s.odds || 0).toFixed(2)}</td>
                                             <td class="p-3 font-bold text-red-600">${(s.stakeAmount || 0).toFixed(2)} лв</td>
                                             <td class="p-3 font-bold text-green-600">+${((s.potentialProfit || 0)).toFixed(2)} лв</td>
+                                            <td class="p-3 text-center">${s.sentToTelegram ? '<span class="text-2xl">✅</span>' : '<span class="text-2xl">⏳</span>'}</td>
                                             <td class="p-3">
                                                 <div class="flex gap-1 flex-wrap">
                                                     <button onclick="editStake('${s.id}')" 
@@ -950,7 +1026,6 @@
                 ` : ''}
             `;
             
-            // КРИТИЧНО: Добавяме event listeners след рендиране
             const homeInput = document.getElementById('homeTeamInput');
             const awayInput = document.getElementById('awayTeamInput');
             const marketSelect = document.getElementById('marketSelect');
@@ -1075,6 +1150,7 @@
                                     <th class="p-2 text-left">Коеф.</th>
                                     <th class="p-2 text-left">Залог</th>
                                     <th class="p-2 text-left">Резултат</th>
+                                    <th class="p-2 text-left">Telegram</th>
                                     <th class="p-2 text-left">Време</th>
                                 </tr>
                             </thead>
@@ -1097,6 +1173,7 @@
                                                 ${(s.result || 'PENDING').toUpperCase()}
                                             </span>
                                         </td>
+                                        <td class="p-2 text-center">${s.sentToTelegram ? '✅' : '⏳'}</td>
                                         <td class="p-2 text-xs">${s.timestamp ? s.timestamp.toLocaleString('bg-BG') : 'N/A'}</td>
                                     </tr>
                                 `).join('')}
