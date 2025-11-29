@@ -139,44 +139,60 @@
             measurementId: "G-196ZJ43NT2"
         };
         
-        // Чакаме Firebase да се зареди
-        window.addEventListener('load', function() {
-            if (typeof firebase === 'undefined') {
-                console.error('❌ Firebase не е зареден!');
-                alert('Грешка при зареждане на приложението. Моля презаредете страницата.');
-                return;
-            }
-            
-            // Инициализираме Firebase
-            try {
-                firebase.initializeApp(firebaseConfig);
-                auth = firebase.auth();
-                db = firebase.firestore();
-                console.log('✅ Firebase инициализиран успешно!');
+        // Функция за инициализация на Firebase
+        function initializeFirebase() {
+            return new Promise((resolve, reject) => {
+                let attempts = 0;
+                const maxAttempts = 50;
                 
-                // Стартираме auth listener
-                auth.onAuthStateChanged(async (user) => {
-                    if (user && !isAdmin) {
-                        currentUser = user;
-                        const userDoc = await db.collection('users').doc(user.uid).get();
-                        const userData = userDoc.data();
+                const checkFirebase = setInterval(() => {
+                    attempts++;
+                    
+                    if (typeof firebase !== 'undefined') {
+                        clearInterval(checkFirebase);
                         
-                        state.initialBank = userData.initialBank || 1000;
-                        
-                        document.getElementById('authScreen').classList.add('hidden');
-                        document.getElementById('mainApp').classList.remove('hidden');
-                        document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
-                        
-                        await loadUserCalculator();
-                    } else if (!isAdmin) {
-                        document.getElementById('authScreen').classList.remove('hidden');
-                        document.getElementById('mainApp').classList.add('hidden');
+                        try {
+                            firebase.initializeApp(firebaseConfig);
+                            auth = firebase.auth();
+                            db = firebase.firestore();
+                            console.log('✅ Firebase инициализиран успешно!');
+                            resolve();
+                        } catch (error) {
+                            console.error('❌ Грешка при Firebase инициализация:', error);
+                            reject(error);
+                        }
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkFirebase);
+                        reject(new Error('Firebase не се зареди след ' + maxAttempts + ' опита'));
                     }
-                });
-            } catch (error) {
-                console.error('❌ Грешка при Firebase инициализация:', error);
-                alert('Грешка при инициализация на Firebase: ' + error.message);
-            }
+                }, 100);
+            });
+        }
+        
+        // Стартираме инициализацията
+        initializeFirebase().then(() => {
+            // Firebase е готов, стартираме auth listener
+            auth.onAuthStateChanged(async (user) => {
+                if (user && !isAdmin) {
+                    currentUser = user;
+                    const userDoc = await db.collection('users').doc(user.uid).get();
+                    const userData = userDoc.data();
+                    
+                    state.initialBank = userData.initialBank || 1000;
+                    
+                    document.getElementById('authScreen').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('userInfo').textContent = `Здравей, ${userData.username}!`;
+                    
+                    await loadUserCalculator();
+                } else if (!isAdmin) {
+                    document.getElementById('authScreen').classList.remove('hidden');
+                    document.getElementById('mainApp').classList.add('hidden');
+                }
+            });
+        }).catch((error) => {
+            console.error('❌ Firebase инициализация се провали:', error);
+            alert('Грешка при зареждане на Firebase. Моля, презаредете страницата.\n\nГрешка: ' + error.message);
         });
         
         const ADMIN_PASSWORD = "Bold_9000";
