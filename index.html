@@ -762,38 +762,42 @@
                 return;
             }
             
-            const stakeDoc = await db.collection('stakes').doc(stakeId).get();
-            const oldStake = stakeDoc.data();
-            
-            state.currentBank += oldStake.stakeAmount || 0;
-            
-            const newStakeAmount = calculateStakeAmount(odds, winProb, kellyType, state.currentBank);
-            
-            if (newStakeAmount > state.currentBank) {
-                alert('Недостатъчно средства за новата сума!');
-                state.currentBank -= oldStake.stakeAmount || 0;
-                return;
+            try {
+                const stakeDoc = await db.collection('stakes').doc(stakeId).get();
+                const oldStake = stakeDoc.data();
+                
+                state.currentBank += oldStake.stakeAmount || 0;
+                
+                const newStakeAmount = calculateStakeAmount(odds, winProb, kellyType, state.currentBank);
+                
+                if (newStakeAmount > state.currentBank) {
+                    alert('Недостатъчно средства за новата сума!');
+                    state.currentBank -= oldStake.stakeAmount || 0;
+                    return;
+                }
+                
+                await db.collection('stakes').doc(stakeId).update({
+                    homeTeam: homeTeam,
+                    awayTeam: awayTeam,
+                    market: market,
+                    kellyType: kellyType,
+                    odds: odds,
+                    winProb: winProb,
+                    stakeAmount: newStakeAmount,
+                    potentialWin: newStakeAmount * odds,
+                    potentialProfit: (newStakeAmount * odds) - newStakeAmount,
+                    sentToTelegram: false
+                });
+                
+                state.currentBank -= newStakeAmount;
+                
+                closeEditModal();
+                await loadUserCalculator();
+                
+                alert('✅ Залогът е обновен успешно!');
+            } catch (error) {
+                alert('❌ Грешка при запазване: ' + error.message);
             }
-            
-            await db.collection('stakes').doc(stakeId).update({
-                homeTeam: homeTeam,
-                awayTeam: awayTeam,
-                market: market,
-                kellyType: kellyType,
-                odds: odds,
-                winProb: winProb,
-                stakeAmount: newStakeAmount,
-                potentialWin: newStakeAmount * odds,
-                potentialProfit: (newStakeAmount * odds) - newStakeAmount,
-                sentToTelegram: false
-            });
-            
-            state.currentBank -= newStakeAmount;
-            
-            closeEditModal();
-            await loadUserCalculator();
-            
-            alert('✅ Залогът е обновен успешно!');
         }
 
         function exportToExcel(stakes, username = 'User') {
