@@ -523,7 +523,149 @@
             await loadUserCalculator();
         }
 
-        async function editStake(stakeId) {
+        async function deleteStake(stakeId) {
+            if (!confirm('Сигурен ли си че искаш да изтриеш този залог? Това действие е необратимо!')) {
+                return;
+            }
+            
+            try {
+                const stakeDoc = await db.collection('stakes').doc(stakeId).get();
+                const stake = stakeDoc.data();
+                
+                // Връщаме парите в банката ако е pending
+                if (stake.result === 'pending') {
+                    state.currentBank += stake.stakeAmount || 0;
+                }
+                
+                // Изтриваме залога
+                await db.collection('stakes').doc(stakeId).delete();
+                
+                alert('✅ Залогът е изтрит успешно!');
+                await loadUserCalculator();
+            } catch (error) {
+                alert('❌ Грешка при изтриване: ' + error.message);
+            }
+        }
+
+        async function editCompletedStake(stakeId) {
+            const stakeDoc = await db.collection('stakes').doc(stakeId).get();
+            const stake = stakeDoc.data();
+            
+            const modal = document.createElement('div');
+            modal.id = 'editModal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <h2 class="text-2xl font-bold mb-4 text-blue-600">⚙️ Редактирай Завършен Залог #${stake.number}</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">🏠 Домакин</label>
+                            <input type="text" id="editHomeTeam" value="${stake.homeTeam || ''}" class="w-full p-3 border-2 rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">✈️ Гост</label>
+                            <input type="text" id="editAwayTeam" value="${stake.awayTeam || ''}" class="w-full p-3 border-2 rounded-lg">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Пазар</label>
+                            <select id="editMarket" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                                <option value="home" ${stake.market === 'home' ? 'selected' : ''}>🏠 Home</option>
+                                <option value="away" ${stake.market === 'away' ? 'selected' : ''}>✈️ Away</option>
+                                <option value="over1.5" ${stake.market === 'over1.5' ? 'selected' : ''}>⚽ Over 1.5</option>
+                                <option value="under1.5" ${stake.market === 'under1.5' ? 'selected' : ''}>⚽ Under 1.5</option>
+                                <option value="over2.5" ${stake.market === 'over2.5' ? 'selected' : ''}>⚽ Over 2.5</option>
+                                <option value="under2.5" ${stake.market === 'under2.5' ? 'selected' : ''}>⚽ Under 2.5</option>
+                                <option value="over4.5" ${stake.market === 'over4.5' ? 'selected' : ''}>⚽ Over 4.5</option>
+                                <option value="under4.5" ${stake.market === 'under4.5' ? 'selected' : ''}>⚽ Under 4.5</option>
+                                <option value="corners" ${stake.market === 'corners' ? 'selected' : ''}>🚩 Corners</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Резултат</label>
+                            <select id="editResult" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                                <option value="pending" ${stake.result === 'pending' ? 'selected' : ''}>⏳ Pending</option>
+                                <option value="win" ${stake.result === 'win' ? 'selected' : ''}>✅ Win</option>
+                                <option value="lose" ${stake.result === 'lose' ? 'selected' : ''}>❌ Lose</option>
+                                <option value="push" ${stake.result === 'push' ? 'selected' : ''}>🔄 Push</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Коефициент</label>
+                            <input type="number" step="0.01" id="editOdds" value="${stake.odds || ''}" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Kelly Тип</label>
+                            <select id="editKellyType" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                                <option value="half" ${stake.kellyType === 'half' ? 'selected' : ''}>Half Kelly</option>
+                                <option value="quarter" ${stake.kellyType === 'quarter' ? 'selected' : ''}>Quarter Kelly</option>
+                                <option value="full" ${stake.kellyType === 'full' ? 'selected' : ''}>Full Kelly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Сума (лв)</label>
+                            <input type="number" step="0.01" id="editStakeAmount" value="${stake.stakeAmount || ''}" class="w-full p-3 border-2 border-gray-300 rounded-lg">
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button onclick="saveCompletedStakeEdit('${stakeId}')" class="flex-1 bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold">
+                            ✅ Запази
+                        </button>
+                        <button onclick="deleteStake('${stakeId}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold">
+                            🗑️ Изтрий
+                        </button>
+                        <button onclick="closeEditModal()" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white p-3 rounded-lg font-semibold">
+                            ❌ Отказ
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        async function saveCompletedStakeEdit(stakeId) {
+            const homeTeam = document.getElementById('editHomeTeam').value;
+            const awayTeam = document.getElementById('editAwayTeam').value;
+            const market = document.getElementById('editMarket').value;
+            const kellyType = document.getElementById('editKellyType').value;
+            const odds = parseFloat(document.getElementById('editOdds').value);
+            const stakeAmount = parseFloat(document.getElementById('editStakeAmount').value);
+            const result = document.getElementById('editResult').value;
+            
+            if (!homeTeam || !awayTeam || !odds || !stakeAmount) {
+                alert('Моля, попълнете всички полета!');
+                return;
+            }
+            
+            try {
+                await db.collection('stakes').doc(stakeId).update({
+                    homeTeam: homeTeam,
+                    awayTeam: awayTeam,
+                    market: market,
+                    kellyType: kellyType,
+                    odds: odds,
+                    stakeAmount: stakeAmount,
+                    potentialWin: stakeAmount * odds,
+                    potentialProfit: (stakeAmount * odds) - stakeAmount,
+                    result: result
+                });
+                
+                closeEditModal();
+                await loadUserCalculator();
+                
+                alert('✅ Залогът е обновен успешно!');
+            } catch (error) {
+                alert('❌ Грешка при запазване: ' + error.message);
+            }
+        }
             const stakeDoc = await db.collection('stakes').doc(stakeId).get();
             const stake = stakeDoc.data();
             
@@ -1039,6 +1181,7 @@
                                         <th class="p-2 text-left">Залог</th>
                                         <th class="p-2 text-left">Резултат</th>
                                         <th class="p-2 text-left">Profit/Loss</th>
+                                        <th class="p-2 text-left">Действие</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1056,6 +1199,12 @@
                                             </td>
                                             <td class="p-2 font-bold ${s.result === 'win' ? 'text-green-600' : 'text-red-600'}">
                                                 ${s.result === 'win' ? '+' + ((s.potentialProfit || 0).toFixed(2)) : '-' + ((s.stakeAmount || 0).toFixed(2))} лв
+                                            </td>
+                                            <td class="p-2">
+                                                <button onclick="editCompletedStake('${s.id}')" 
+                                                    class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                                    ⚙️ Редакция
+                                                </button>
                                             </td>
                                         </tr>
                                     `).join('')}
