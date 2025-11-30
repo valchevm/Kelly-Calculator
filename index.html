@@ -540,6 +540,7 @@
                 // Изтриваме залога
                 await db.collection('stakes').doc(stakeId).delete();
                 
+                closeEditModal();
                 alert('✅ Залогът е изтрит успешно!');
                 await loadUserCalculator();
             } catch (error) {
@@ -575,6 +576,8 @@
                             <select id="editMarket" class="w-full p-3 border-2 border-gray-300 rounded-lg">
                                 <option value="home" ${stake.market === 'home' ? 'selected' : ''}>🏠 Home</option>
                                 <option value="away" ${stake.market === 'away' ? 'selected' : ''}>✈️ Away</option>
+                                <option value="over0.5home" ${stake.market === 'over0.5home' ? 'selected' : ''}>⚽ Over 0.5 Home</option>
+                                <option value="over0.5away" ${stake.market === 'over0.5away' ? 'selected' : ''}>⚽ Over 0.5 Away</option>
                                 <option value="over1.5" ${stake.market === 'over1.5' ? 'selected' : ''}>⚽ Over 1.5</option>
                                 <option value="under1.5" ${stake.market === 'under1.5' ? 'selected' : ''}>⚽ Under 1.5</option>
                                 <option value="over2.5" ${stake.market === 'over2.5' ? 'selected' : ''}>⚽ Over 2.5</option>
@@ -693,6 +696,8 @@
                             <select id="editMarket" class="w-full p-3 border-2 border-gray-300 rounded-lg">
                                 <option value="home" ${stake.market === 'home' ? 'selected' : ''}>🏠 Home</option>
                                 <option value="away" ${stake.market === 'away' ? 'selected' : ''}>✈️ Away</option>
+                                <option value="over0.5home" ${stake.market === 'over0.5home' ? 'selected' : ''}>⚽ Over 0.5 Home</option>
+                                <option value="over0.5away" ${stake.market === 'over0.5away' ? 'selected' : ''}>⚽ Over 0.5 Away</option>
                                 <option value="over1.5" ${stake.market === 'over1.5' ? 'selected' : ''}>⚽ Over 1.5</option>
                                 <option value="under1.5" ${stake.market === 'under1.5' ? 'selected' : ''}>⚽ Under 1.5</option>
                                 <option value="over2.5" ${stake.market === 'over2.5' ? 'selected' : ''}>⚽ Over 2.5</option>
@@ -941,6 +946,8 @@
             const labels = {
                 'home': '🏠 Home',
                 'away': '✈️ Away',
+                'over0.5home': '⚽ Over 0.5 Home',
+                'over0.5away': '⚽ Over 0.5 Away',
                 'over1.5': '⚽ Over 1.5',
                 'under1.5': '⚽ Under 1.5',
                 'over2.5': '⚽ Over 2.5',
@@ -1041,6 +1048,8 @@
                             <select id="marketSelect" class="w-full p-3 border-2 border-gray-300 rounded-lg">
                                 <option value="home" ${state.market === 'home' ? 'selected' : ''}>🏠 Home</option>
                                 <option value="away" ${state.market === 'away' ? 'selected' : ''}>✈️ Away</option>
+                                <option value="over0.5home" ${state.market === 'over0.5home' ? 'selected' : ''}>⚽ Over 0.5 Home</option>
+                                <option value="over0.5away" ${state.market === 'over0.5away' ? 'selected' : ''}>⚽ Over 0.5 Away</option>
                                 <option value="over1.5" ${state.market === 'over1.5' ? 'selected' : ''}>⚽ Over 1.5</option>
                                 <option value="under1.5" ${state.market === 'under1.5' ? 'selected' : ''}>⚽ Under 1.5</option>
                                 <option value="over2.5" ${state.market === 'over2.5' ? 'selected' : ''}>⚽ Over 2.5</option>
